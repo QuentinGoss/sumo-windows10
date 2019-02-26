@@ -237,10 +237,10 @@ def create_vehicles(n_step):
     # We want half of the vehicles to travel eastbound and half
     # To travel westbound.
     if (random.uniform(0.0,1.0) > 0.5):
-      traci.vehicle.add(s_vehicle_id, "eastbound", depart=n_step+1, pos=-4, speed=-3, lane=-6, typeID="chevy_s10")
+      traci.vehicle.add(s_vehicle_id, "eastbound", typeID="chevy_s10")
       s_dest_edge = "gneE50"
     else:
-      traci.vehicle.add(s_vehicle_id, "westbound", depart=n_step+1, pos=-4, speed=-3, lane=-6, typeID="chevy_s10")
+      traci.vehicle.add(s_vehicle_id, "westbound", typeID="chevy_s10")
       s_dest_edge = "-gneE52"
     N_VEHICLES += 1
     

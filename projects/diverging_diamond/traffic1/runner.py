@@ -131,7 +131,6 @@ random.seed(config.n_seed)
 ###############################
 # Global Variables
 ###############################
-LS_EDGE_IDS = []
 N_VEHICLES = 0
 
 ###############################
@@ -149,15 +148,6 @@ def generate_elements():
 # Initilize anything that needs to happen at step 0 here.
 ###############################
 def initialize():
-  # Get the list of edges passenger cars can travel on.
-  from ValidEdgeRetriever import ValidEdgeRetriever
-  ver = ValidEdgeRetriever(config.s_net_file)
-  ver.vClassAllow(['passenger'],True)
-
-  # Load in the edges to a data structure.
-  global LS_EDGE_IDS
-  LS_EDGE_IDS = ver.findValidEdges()
-  
   return
 # end def intialize
 
@@ -168,7 +158,10 @@ def initialize():
 ###############################
 def timestep(n_step):  
   create_vehicles(n_step)
+  create_vehicles(n_step)
+  create_vehicles(n_step)
   reroute_vehicles(n_step)
+  remove_vehicles_at_exits()
   return
 # end timestep
 
@@ -190,9 +183,13 @@ def create_vehicles(n_step):
     s_edge_dest = ""
     
     # Choose an edge to start at.
-    global LS_EDGE_IDS
-    n_index_init = random.randint(0,len(LS_EDGE_IDS)-1)
-    s_edge_init = LS_EDGE_IDS[n_index_init]
+    n_index_init = random.randint(0,len(config.ls_init_edges)-1)
+    s_edge_init = config.ls_init_edges[n_index_init]
+	
+    if not s_edge_init in config.ls_interstate_edges:
+      n_random_number = random.randint(1,3)
+      if not n_random_number == 3:
+        return
     
     # Create a route to start at if neccesary.
     if not ('RT' + s_edge_init) in traci.route.getIDList():
@@ -204,10 +201,10 @@ def create_vehicles(n_step):
     
     # Choose an edge to end at.
     while True:
-      n_index_dest = random.randint(0,len(LS_EDGE_IDS)-1)
+      n_index_dest = random.randint(0,len(config.ls_init_edges)-1)
       if not n_index_dest == n_index_init:
         break
-    s_edge_dest = LS_EDGE_IDS[n_index_dest]
+    s_edge_dest = config.ls_init_edges[n_index_dest]
     
     # Increment vehicle num counter to keep IDs unique.
     N_VEHICLES += 1
@@ -227,6 +224,8 @@ def create_vehicles(n_step):
 # Reroutes a vehicle someplace else
 ###############################
 def reroute_vehicles(n_step):
+  if (config.n_vehicle_reroute_rate == 0):
+    return
   
   ls_vehicle_ids = traci.vehicle.getIDList()
   if len(ls_vehicle_ids) == 0:
@@ -243,9 +242,8 @@ def reroute_vehicles(n_step):
     s_vehicle_id = ls_vehicle_ids[n_index_vehicle]
     
     # Pick a destination at random
-    global LS_EDGE_IDS
-    n_index_edge = random.randint(0,len(LS_EDGE_IDS)-1)
-    s_edge_dest = LS_EDGE_IDS[n_index_edge]
+    n_index_edge = random.randint(0,len(config.ls_exit_edges)-1)
+    s_edge_dest = config.ls_exit_edges[n_index_edge]
     
     # Reroute it
     traci.vehicle.changeTarget(s_vehicle_id,s_edge_dest)
@@ -253,6 +251,17 @@ def reroute_vehicles(n_step):
     return
   # end if (n_step % config.n_vehicle_reroute_rate == 0):
 # end def reroute_vehicles(n_step)
+
+
+###############################
+# Remove vehicles on exit edges
+###############################
+def remove_vehicles_at_exits():
+  ls_vehicle_ids = traci.vehicle.getIDList()
+  for s_veh_id in ls_vehicle_ids:
+    if traci.vehicle.getRoadID(s_veh_id) in config.ls_exit_edges:
+      traci.vehicle.remove(s_veh_id)
+# end def remove_veh_at_exits():
 
 
 ###############################
