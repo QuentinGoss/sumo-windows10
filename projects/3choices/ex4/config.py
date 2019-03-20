@@ -12,7 +12,7 @@ n_time_steps = 3000
 #      ex4 configuration
 ###############################
 s_vtype = """<vType id="chevy_s10" accel="0.6" decel="1.3" sigma="0.4" length="5" minGap="2.5" maxSpeed="10" guiShape="passenger"/>"""
-lsn_colors = [(255,0,0,0),(0,255,0,0),(0,0,255,0),(255,255,0,0),(255,0,255,0),(0,255,255,0)]
+lsn_colors = [(255,0,0),(0,255,0),(0,0,255),(255,255,0),(255,0,255),(0,255,255)]
 n_seed = 777333
 n_vehicle_spawn_rate=20 # How many time steps between new vehicles spawning?
 n_vehicles_max=1 # The maximum number of vehicles that may exist in the simulation.

@@ -127,16 +127,16 @@ def run():
       s_vehicle_id = "veh"+str(n_vehicles) # ehicle ID
       
       if (n_random_int == 1): # Top
-        traci.vehicle.add(s_vehicle_id, "top", depart=n_step+1, pos=-4, speed=-3, lane=-6, typeID="chevy_s10")
-        traci.vehicle.setColor(s_vehicle_id,(255,0,0,0))
+        traci.vehicle.add(s_vehicle_id, "top", typeID="chevy_s10")
+        traci.vehicle.setColor(s_vehicle_id,(255,0,0))
         
       elif(n_random_int == 2): # Middle
-        traci.vehicle.add(s_vehicle_id, "middle", depart=n_step+1, pos=-4, speed=-3, lane=-6, typeID="chevy_s10")
-        traci.vehicle.setColor(s_vehicle_id,(0,255,0,0))
+        traci.vehicle.add(s_vehicle_id, "middle",  typeID="chevy_s10")
+        traci.vehicle.setColor(s_vehicle_id,(0,255,0))
         
       else: # Bottom
-        traci.vehicle.add(s_vehicle_id, "bottom", depart=n_step+1, pos=-4, speed=-3, lane=-6, typeID="chevy_s10")
-        traci.vehicle.setColor(s_vehicle_id,(0,0,255,0))
+        traci.vehicle.add(s_vehicle_id, "bottom",  typeID="chevy_s10")
+        traci.vehicle.setColor(s_vehicle_id,(0,0,255))
         
       n_vehicles += 1
     # end if (n_step % N_VEHICLE_SPAWN_RATE == 0):

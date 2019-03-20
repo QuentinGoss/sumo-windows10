@@ -194,7 +194,7 @@ def create_pois():
     s_poi_id = "poi" + str(n_pois)
     
     # traci.poi.add( ID, x, y, Color, arbitrary desc., layer) 
-    traci.poi.add(s_poi_id, lf_poi[0], lf_poi[1], (100,100,100,0), poiType="taco_cart",layer=0)
+    traci.poi.add(s_poi_id, lf_poi[0], lf_poi[1], (100,100,100), poiType="taco_cart",layer=0)
     
     # Finds the closest edge to an xy coordinate.
     # (edgeID, closest_edge_x, closest_edge_y)
@@ -266,7 +266,7 @@ def choose_vehicle_to_reroute(n_step):
       s_veh_id = "veh5"
       
       # Change color to orange.
-      traci.vehicle.setColor(s_veh_id,(255,0,0,0))
+      traci.vehicle.setColor(s_veh_id,(255,0,0))
       
       # Create a new vehicle object
       veh = retrieve_vehicle(s_veh_id)
@@ -288,7 +288,7 @@ def choose_vehicle_to_reroute(n_step):
       s_veh_id = ls_veh_ids[n_random_int]
       
       # Change color to orange.
-      traci.vehicle.setColor(s_veh_id,(255,0,0,0))
+      traci.vehicle.setColor(s_veh_id,(255,0,0))
       
       # Create a new vehicle object
       veh = retrieve_vehicle(s_veh_id)
@@ -446,14 +446,14 @@ def handle_vehicles(n_step):
         # vary by reason for going home.
         # REASON: No more capacity. Cars will turn CYAN.
         if is_full:
-          traci.vehicle.setColor(veh.get_id(),(0,255,255,0))
+          traci.vehicle.setColor(veh.get_id(),(0,255,255))
         # REASON: Visited every unique POI. Cars will turn GREEN  
         elif is_bored:
-          traci.vehicle.setColor(veh.get_id(),(0,255,0,0))
+          traci.vehicle.setColor(veh.get_id(),(0,255,0))
         # REASON: Unknown. Cars will turn DARK GREY
         # If cars are grey, there's a logic problem!
         else:
-          traci.vehicle.setColor(veh.get_id(),(30,30,30,0))
+          traci.vehicle.setColor(veh.get_id(),(30,30,30))
         
         # remove the vehicle from the list since we no longer need to
         # track it.
@@ -476,13 +476,13 @@ def update_vehicle_color(veh):
   n_capacity = veh.get_capacity()
   s_veh_id = veh.get_id()
   if n_capacity > 510:
-    traci.vehicle.setColor(s_veh_id,(255,0,0,0))
+    traci.vehicle.setColor(s_veh_id,(255,0,0))
   elif n_capacity > 255 and n_capacity <= 510:
-    traci.vehicle.setColor(s_veh_id,(255,0,510-n_capacity,0))
+    traci.vehicle.setColor(s_veh_id,(255,0,510-n_capacity))
   elif n_capacity >= 0 and n_capacity <= 255:
-    traci.vehicle.setColor(s_veh_id,(0+n_capacity,0,255,0))
+    traci.vehicle.setColor(s_veh_id,(0+n_capacity,0,255))
   else:
-    traci.vehicle.setColor(s_veh_id,(0,255,255,0))
+    traci.vehicle.setColor(s_veh_id,(0,255,255))
     
   del veh
   del n_capacity
@@ -511,11 +511,11 @@ def poi_value_update(n_step):
       # Colors are (red, green, blue, alpha)
       n_color_intensity = int((poi.getValue() / config.f_poi_value_max) * 255)
       if (poi.getValue() < 0):
-        traci.poi.setColor(poi.getID(),(255,0,0,0))
+        traci.poi.setColor(poi.getID(),(255,0,0))
       elif (poi.getValue() > 255):
-        traci.poi.setColor(poi.getID(),(0,255,0,0))
+        traci.poi.setColor(poi.getID(),(0,255,0))
       else:
-        traci.poi.setColor(poi.getID(),(255-n_color_intensity,0+n_color_intensity,0,0))
+        traci.poi.setColor(poi.getID(),(255-n_color_intensity,0+n_color_intensity,0))
     # end for o_poi in L_POIS:
   # end if (n_step % config.n_poi_value_update_rate):
   

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- generated on 02/26/19 21:39:56 by Eclipse SUMO netedit Version v1_0_1+0383-8ba62d898b
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/netconvertConfiguration.xsd">
+
+    <input>
+        <sumo-net-file value="tolls.net.xml"/>
+    </input>
+
+    <output>
+        <output-file value="tolls.net.xml"/>
+    </output>
+
+    <processing>
+        <offset.disable-normalization value="true"/>
+        <lefthand value="false"/>
+    </processing>
+
+    <junctions>
+        <no-internal-links value="true"/>
+        <no-turnarounds value="true"/>
+        <junctions.corner-detail value="5"/>
+        <junctions.limit-turn-speed value="5.5"/>
+        <rectangular-lane-cut value="false"/>
+    </junctions>
+
+    <pedestrian>
+        <walkingareas value="false"/>
+    </pedestrian>
+
+</configuration>
+-->
+
+<additional xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/additional_file.xsd">
+    <poly id="poly_0" color="23,255,0" fill="1" layer="10.00" shape="161.210000,89.230000 161.350000,33.450000 165.170000,33.450000 164.180000,89.230000"/>
+    <poly id="poly_1" color="blue" fill="1" layer="10.00" shape="-32.750000,-12.850000 17.490000,-54.360000 20.800000,-51.670000 -29.650000,-9.500000"/>
+    <poly id="poly_2" color="255,147,0" fill="1" layer="10.00" shape="68.440000,-157.610000 68.710000,-227.230000 74.490000,-227.230000 72.660000,-157.990000"/>
+    <poi id="POI_0" color="blue" layer="202.00" lane="gneE103_0" pos="17.69"/>
+    <poi id="POI_1" color="blue" layer="202.00" lane="gneE101_0" pos="17.88"/>
+    <poi id="POI_2" color="255,147,0" layer="202.00" lane="gneE119_0" pos="14.48"/>
+    <poi id="POI_3" color="255,147,0" layer="202.00" lane="gneE121_0" pos="15.53"/>
+    <poi id="POI_4" color="23,255,0" layer="202.00" lane="gneE85_0" pos="25.83"/>
+    <poi id="POI_5" color="23,255,0" layer="202.00" lane="gneE88_0" pos="25.08"/>
+</additional>

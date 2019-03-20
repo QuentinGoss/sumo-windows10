@@ -200,7 +200,7 @@ def create_vehicles(n_step):
     s_vehicle_id = "veh" + str(N_VEHICLES) # vehX
     
     # All vehicles spawn into a 1 edge route. 
-    traci.vehicle.add(s_vehicle_id, "start", depart=n_step+1, pos=-4, speed=-3, lane=-6, typeID="chevy_s10")
+    traci.vehicle.add(s_vehicle_id, "start", typeID="chevy_s10")
     N_VEHICLES += 1
     
     # Assign them a route.
