@@ -1,0 +1,1 @@
+e.coords_norm = [[normalize(e.coords_true[0][0],BOUNDS[1][0].BOUNDS[0][0]),normalize(e.coords_true[0][1],BOUNDS[1][1].BOUNDS[0][1])],[normalize(e.coords_true[1][0],BOUNDS[1][0].BOUNDS[0][0]),normalize(e.coords_true[1][1],BOUNDS[1][1].BOUNDS[0][1])]]

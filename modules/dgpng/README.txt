@@ -1,0 +1,1 @@
+To use the Python Image Library (PIL) you MUST istall Pillow. See install.bat.
