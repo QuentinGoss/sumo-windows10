@@ -1,0 +1,3 @@
+nashpy
+numpy
+scipy
