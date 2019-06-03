@@ -5,15 +5,13 @@ import os
 import sys
 from random import choice
 sys.path.append("./../")
-from core import initialize, generate_routefile, timestep
 from traci_env import EnvironmentListener
 
 print(traci.__file__)
 
 #sumo_path = os.path.join(Settings.default, Settings.sumo_config)
-generate_routefile()
 
-traci.start(["sumo", "-c", Settings.sumo_config])
+traci.start(["sumo-gui", "-c", Settings.sumo_config])
 
 #initialize(traci)
 n_step = 0
