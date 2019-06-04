@@ -26,6 +26,8 @@ class Environment(object):
 		for i in range(amount):
 			traci.route.add('route'+str(i), [choice(list_edges) for _ in range(2)])
 			traci.vehicle.add('veh'+str(i), 'route'+str(i), typeID='chevy_s10',departLane='random')
+			#route = traci.simulation.findRoute(traci.route.getEdges('route'+str(i))[0], traci.route.getEdges('route'+str(i))[1])
+			#print(route.edges)
 
 
 
@@ -35,8 +37,7 @@ class Environment(object):
 	def populate_players(self, data):
 		arrived_list = traci.simulation.getArrivedIDList()
 		for key, value in data.items():
-			#print(value)
-			print(value[tc.VAR_EDGES])
+
 			if key in self.player_data:
 				#traci.vehicle.setColor(key,(255, 255, 255))
 				if key in arrived_list:
