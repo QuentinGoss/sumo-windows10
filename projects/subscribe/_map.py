@@ -54,6 +54,12 @@ class Map(object):
 			self.junctions[item.attributes['to'].value].adjacent_edges_from.append(item.attributes['id'].value)
 
 	def row_col(self, row, column):
+		row_col_dict = {}
+
+		print(sorted(self.junctions.values(), key=lambda edge:edge.coord[0]))
+
+
+
 		return {}
 		
 
