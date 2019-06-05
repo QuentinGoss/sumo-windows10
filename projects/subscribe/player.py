@@ -10,10 +10,12 @@ class Player(object):
 		self.edge = edge
 		
 class GridPlayer(object):
-	def __init__(self, index, destination):
-		self.index = index
+	def __init__(self, start, destination):
+		self.start = start
 		self.destination = destination
-		self.path = []
+		self.path = None
+		self.node_path = None
+
 
 
 if __name__ == '__main__':

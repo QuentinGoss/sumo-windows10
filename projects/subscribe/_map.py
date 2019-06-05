@@ -64,16 +64,34 @@ class Map(object):
 		row_col_dict = {}
 		sorted_junctions = sorted(self.junctions.values(), key= attrgetter('y', 'x'), reverse=True)
 		assert len(sorted_junctions) == row*column, 'converting map from sumo failed'
-		#print(sorted_junctions)
 		index = 0
 		for i in range(row):
 			for j in range(column-1, -1, -1):
 				row_col_dict[str(i)+'_'+str(j)] = sorted_junctions[index].junction_id
 				index+=1
 
-
-		print(row_col_dict)
+		#print(row_col_dict)
 		return row_col_dict
+
+	def find_best_route(self, start, end):
+		if start == end:
+			return
+		best_route = None
+		for start_edge in self.junctions[start].adjacent_edges_to:
+			for end_edge in self.junctions[end].adjacent_edges_from:
+				if not best_route:
+					best_route = traci.simulation.findRoute(start_edge, end_edge)
+				else:
+					current_route = traci.simulation.findRoute(start_edge, end_edge)
+					if current_route.travelTime < best_route.travelTime:
+						best_route = current_route
+
+
+		#print(best_route)
+		return best_route
+
+
+
 		
 
 

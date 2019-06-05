@@ -3,13 +3,20 @@ import traci
 from _map import Map
 from player import GridPlayer
 from random import randrange
-row = 10
-column = 10
+from settings import Settings
+import time
+row = 11
+column = 11
+
+
+
 
 
 class GridWin(tk.Tk):
 	def __init__(self, row, column):
 		super(GridWin, self).__init__()
+		traci.start(["sumo", "-c", Settings.sumo_config])
+
 		self.row = row
 		self.column = column
 		self.grid_frame = tk.Frame(self, height=500, width=500, bg='red')
@@ -23,6 +30,7 @@ class GridWin(tk.Tk):
 		self.grid_list = [] #store all the buttons in grid
 		self.env_map = Map()
 		self.rowcol_to_junction = self.env_map.row_col(self.row, self.column) #value is the junction id and key is row_col
+		self.rowcol_to_junction.update(dict((v, k) for k, v in self.rowcol_to_junction.iteritems()))
 		self.player_list = {} #stores location as key, player object as value
 		self.rewards = {} #stores location as key, reward value as value
 
@@ -40,6 +48,7 @@ class GridWin(tk.Tk):
 
 		select_rewards = tk.Button(self.control_frame, text='choose rewards')
 		select_rewards.pack(expand=True, fill='both')
+
 	def spawn_grid(self):
 		for i in range(row):
 			temp_list = []
@@ -53,16 +62,36 @@ class GridWin(tk.Tk):
 
 	def start_sim(self):
 		if not self.player_list:
-			for i in range(100):
+			for i in range(5):
 				row, column = randrange(self.row), randrange(self.column)
 				string_key = str(row) + '_' + str(column)
-				if string_key in self.player_list:
-					self.player_list[string_key].append(GridPlayer(self.rowcol_to_junction[string_key], self.rowcol_to_junction['0_0']))
-				else:
-					self.player_list[string_key] = [GridPlayer(self.rowcol_to_junction[string_key], self.rowcol_to_junction['0_0'])]
-					self.grid_list[rand1][rand2].configure(bg='black')
+				print('starting in ', self.rowcol_to_junction[string_key])
+				player_instance = GridPlayer(self.rowcol_to_junction[string_key], self.rowcol_to_junction['0_0'])
+
+				if player_instance.start != player_instance.destination:
+					player_instance.path = self.env_map.find_best_route(player_instance.start, player_instance.destination)
+					player_instance.node_path = [self.env_map.edges[x]._to for x in player_instance.path.edges]
+
+					print(player_instance.node_path)
+
+
+					if string_key in self.player_list:
+						self.player_list[string_key].append(player_instance)
+					else:
+						self.player_list[string_key] = [player_instance]
+						self.grid_list[row][column].configure(bg='black')
+		#while True:
+			#for key, value in self.player_list
+
+
+
+
+	def on_closing(self):
+		self.destroy()
+		traci.close()
 
 
 if __name__ == "__main__":
 	root = GridWin(row, column)
+	root.protocol("WM_DELETE_WINDOW", root.on_closing)
 	root.mainloop()
