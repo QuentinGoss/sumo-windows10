@@ -64,7 +64,7 @@ class GridWin(tk.Tk):
 
 	def start_sim(self):
 		if not self.player_list:
-			for i in range(5):
+			for i in range(Settings.car_numbers):
 				row, column = randrange(self.row), randrange(self.column)
 				string_key = str(row) + '_' + str(column)
 				#print('starting in ', self.rowcol_to_junction[string_key])
