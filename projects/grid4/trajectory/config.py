@@ -17,6 +17,8 @@ s_net_file = s_absolute_path + "/../data/" + s_project_name + ".net.xml"
 
 
 ###############################
-#      grid4 configuration###############################
+#      grid4 configuration
+###############################
 
-# Add your variables here
+# The properties of our vehicles
+#s_vtype = """<vType id="vw_super" accel="0.6" decel="1.3" sigma="0.4" length="5" minGap="2.5" maxSpeed="3" guiShape="passenger"/>"""
