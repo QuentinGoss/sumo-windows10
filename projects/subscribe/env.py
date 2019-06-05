@@ -17,7 +17,7 @@ class Environment(object):
 		pass
 
 	def initial(self):
-		self.initial_route_random(1)
+		self.initial_route_random(100)
 
 
 	def initial_route_random(self, amount):
