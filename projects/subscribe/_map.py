@@ -7,6 +7,7 @@
 from xml.dom import minidom
 from settings import Settings
 import traci
+from operator import attrgetter
 
 class Edge(object):
 	def __init__(self, _from, _to, speed):
@@ -16,12 +17,23 @@ class Edge(object):
 		
 
 class Junctions(object):
-	def __init__(self, coord):
-		#each junction would contain a utility matrix showing 
+	def __init__(self, coord, junction_id):
+		#each junction would contain a utility matrix showing
+		self.junction_id = junction_id
 		self.coord=coord
 		self.adjacent_edges_to = [] #what edges this junction goes to
 		self.adjacent_edges_from = [] # what edges goes to this junction
 		self.utility = {}
+		self.x = self.coord[0]
+		self.y = self.coord[1]
+		self.number_players = 0
+
+	def __repr__(self):
+		return repr((self.junction_id, self.x,self.y))
+	def get_player_number(self):
+		self.number_players -=1
+		assert self.number_players >=0, 'player number for this cell is below 0 what??!!!'
+		return self.number_players
 
 
 
@@ -45,7 +57,7 @@ class Map(object):
 		junction_list = [x for x in doc.getElementsByTagName('junction') if not ':' in x.attributes['id'].value]
 
 		for item in junction_list:
-			self.junctions[item.attributes['id'].value] = Junctions((float(item.attributes['x'].value), float(item.attributes['y'].value)))
+			self.junctions[item.attributes['id'].value] = Junctions((float(item.attributes['x'].value), float(item.attributes['y'].value)), item.attributes['id'].value)
 
 
 		for item in edge_list:
@@ -55,12 +67,36 @@ class Map(object):
 
 	def row_col(self, row, column):
 		row_col_dict = {}
+		sorted_junctions = sorted(self.junctions.values(), key= attrgetter('y', 'x'), reverse=True)
+		assert len(sorted_junctions) == row*column, 'converting map from sumo failed'
+		index = 0
+		for i in range(row):
+			for j in range(column-1, -1, -1):
+				row_col_dict[str(i)+'_'+str(j)] = sorted_junctions[index].junction_id
+				index+=1
 
-		print(sorted(self.junctions.values(), key=lambda edge:edge.coord[0]))
+		#print(row_col_dict)
+		return row_col_dict
+
+	def find_best_route(self, start, end):
+		if start == end:
+			return
+		best_route = None
+		for start_edge in self.junctions[start].adjacent_edges_to:
+			for end_edge in self.junctions[end].adjacent_edges_from:
+				if not best_route:
+					best_route = traci.simulation.findRoute(start_edge, end_edge)
+				else:
+					current_route = traci.simulation.findRoute(start_edge, end_edge)
+					if current_route.travelTime < best_route.travelTime:
+						best_route = current_route
+
+
+		#print(best_route)
+		return best_route
 
 
 
-		return {}
 		
 
 

@@ -13,6 +13,9 @@ print(traci.__file__)
 
 traci.start(["sumo-gui", "-c", Settings.sumo_config])
 
+#print(traci.simulation.findRoute('cell0_0N', 'cell9_9E'))
+
+
 #initialize(traci)
 n_step = 0
 env = EnvironmentListener()
@@ -26,6 +29,9 @@ while True:
 
 
 traci.close()
+
+
+
 '''
 junctionID_list = traci.junction.getIDList()
 
