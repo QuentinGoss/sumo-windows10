@@ -11,11 +11,17 @@ class Player(object):
 		
 class GridPlayer(object):
 	def __init__(self, start, destination):
+		self.node_index = 0
 		self.start = start
 		self.destination = destination
 		self.path = None
 		self.node_path = None
+	def get_next(self):
 
+		assert self.node_index <= (len(self.node_path) - 1), 'the vehicle arrived at destination'
+		value= self.node_path[self.node_index]
+		self.node_index+=1
+		return value
 
 
 if __name__ == '__main__':

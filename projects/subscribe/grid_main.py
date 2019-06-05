@@ -5,6 +5,8 @@ from player import GridPlayer
 from random import randrange
 from settings import Settings
 import time
+
+
 row = 11
 column = 11
 
@@ -30,7 +32,7 @@ class GridWin(tk.Tk):
 		self.grid_list = [] #store all the buttons in grid
 		self.env_map = Map()
 		self.rowcol_to_junction = self.env_map.row_col(self.row, self.column) #value is the junction id and key is row_col
-		self.rowcol_to_junction.update(dict((v, k) for k, v in self.rowcol_to_junction.iteritems()))
+		self.rowcol_to_junction.update(dict((v, k) for k, v in self.rowcol_to_junction.items()))
 		self.player_list = {} #stores location as key, player object as value
 		self.rewards = {} #stores location as key, reward value as value
 
@@ -65,14 +67,14 @@ class GridWin(tk.Tk):
 			for i in range(5):
 				row, column = randrange(self.row), randrange(self.column)
 				string_key = str(row) + '_' + str(column)
-				print('starting in ', self.rowcol_to_junction[string_key])
+				#print('starting in ', self.rowcol_to_junction[string_key])
 				player_instance = GridPlayer(self.rowcol_to_junction[string_key], self.rowcol_to_junction['0_0'])
 
 				if player_instance.start != player_instance.destination:
 					player_instance.path = self.env_map.find_best_route(player_instance.start, player_instance.destination)
 					player_instance.node_path = [self.env_map.edges[x]._to for x in player_instance.path.edges]
 
-					print(player_instance.node_path)
+					#print(player_instance.node_path)
 
 
 					if string_key in self.player_list:
@@ -80,8 +82,50 @@ class GridWin(tk.Tk):
 					else:
 						self.player_list[string_key] = [player_instance]
 						self.grid_list[row][column].configure(bg='black')
-		#while True:
-			#for key, value in self.player_list
+
+					self.env_map.junctions[self.rowcol_to_junction[string_key]].number_players += 1
+
+
+
+
+
+		
+		while self.player_list:
+			
+			self.update()
+			time.sleep(1)
+			temp_dict = {}
+			for location, players in self.player_list.items():
+				for player in players:
+					try:
+						button_name = self.rowcol_to_junction[player.get_next()]
+					except AssertionError:
+						print('player has arrived from ', self.rowcol_to_junction[player.start])
+						continue
+					button_row, button_column = button_name.split('_')
+					
+
+					#this should be in a function or something
+					if button_name in temp_dict:
+						temp_dict[button_name].append(player)
+					else:
+						temp_dict[button_name] = [player]
+						self.grid_list[int(button_row)][int(button_column)].configure(bg='black')
+
+					self.env_map.junctions[self.rowcol_to_junction[button_name]].number_players += 1
+
+
+
+					#every time a player move away check if the edge contains more players
+					player_number = self.env_map.junctions[self.rowcol_to_junction[location]].get_player_number()
+					if player_number == 0:
+						prev_button_row, prev_button_column = location.split('_')
+						self.grid_list[int(prev_button_row)][int(prev_button_column)].configure(bg='white')
+
+
+				self.player_list = temp_dict
+			
+		print('simulation completed')
 
 
 
