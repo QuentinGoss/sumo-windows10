@@ -16,9 +16,9 @@ class GridPlayer(object):
 		self.destination = destination
 		self.path = None
 		self.node_path = None
+		
 	def get_next(self):
 
-		assert self.node_index <= (len(self.node_path) - 1), 'the vehicle arrived at destination'
 		value= self.node_path[self.node_index]
 		self.node_index+=1
 		return value

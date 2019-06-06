@@ -30,11 +30,7 @@ class Junctions(object):
 
 	def __repr__(self):
 		return repr((self.junction_id, self.x,self.y))
-	def get_player_number(self):
-		self.number_players -=1
-		assert self.number_players >=0, 'player number for this cell is below 0 what??!!!'
-		return self.number_players
-
+		
 
 
 
