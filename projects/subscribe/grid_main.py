@@ -84,7 +84,7 @@ class GridWin(tk.Tk):
 		r = min(r, n-r)
 		numer = reduce(mul, range(n, n-r, -1), 1)
 		denom = reduce(mul, range(1, r+1), 1)
-		return numer / denom
+		return (numer / denom)
 
 
 	
@@ -97,6 +97,7 @@ class GridWin(tk.Tk):
 			for i in range(row):
 				for j in range(column):
 					string_key = str(i) + '_' + str(j)
+					self.grid_list[i][j].configure(command=lambda i=i, j=j: self.add_reward(i,j, 1))
 					self.grid_list[i][j].configure(bg=self.default_button_color)
 					self.grid_list[i][j].configure(fg='black')
 					if string_key in self.reward_list:
@@ -290,8 +291,12 @@ class GridWin(tk.Tk):
 				#the current cell reach the max number of vehicles
 			#	return
 
+		destination = Settings.destination
+		if destination =='random':
+			destination = str(randrange(self.row))+'_'+str(randrange(self.column))
 
-		player_instance = GridPlayer(self.rowcol_to_junction[string_key], self.rowcol_to_junction['0_0'])
+
+		player_instance = GridPlayer(self.rowcol_to_junction[string_key], self.rowcol_to_junction[destination])
 		if player_instance.start != player_instance.destination:
 			player_instance.path = self.env_map.find_best_route(player_instance.start, player_instance.destination)
 			player_instance.node_path = [self.env_map.edges[x]._to for x in player_instance.path.edges]
@@ -303,35 +308,67 @@ class GridWin(tk.Tk):
 				self.player_list[string_key] = [player_instance]
 
 
-
-			
-
 			self.env_map.junctions[self.rowcol_to_junction[string_key]].number_players += 1
 
 			self.grid_list[row][column].configure(bg='black')
 			self.grid_list[row][column].configure(text=self.env_map.junctions[self.rowcol_to_junction[string_key]].number_players)
 
-	def GTA_next_node(self, location, player):
+
+	def redirect_route(self, location, player_index, next_node, reward):
+		player_instance = self.player_list[location][player_index]
+		if next_node != player_instance.destination:
+			player_instance.path = self.env_map.find_best_route(next_node, player_instance.destination)
+			player_instance.node_path = [self.env_map.edges[x]._to for x in player_instance.path.edges]
+			player_instance.node_index=0
+			player_instance.capacity -= reward
+
+		return player_instance
+
+			#print(self.player_list[location][player_index].node_path)
+
+
+
+
+	def GTA_next_node(self, location, player_index):
 		cells = self.find_adjacent_cells(location)
 
 		max_utility = 0
-		max_ultility_cell = None
+		max_utility_cell = None
 
 		for cell in cells:
 			adjacent_players = self.find_adjacent_players(cell) #in jake's code this should return N-1
-			adjacent_players -=	1
 
-			if adjacent_players == 0:
-				pass
+			cell_utility = 0   
+			try:
+				cell_utility = self.reward_list[cell]
+				if cell_utility == 0:
+					continue
+			except KeyError:
+				continue
 
-			#reward_average = adjacent_players/
+			expected_utility = 0
+
+			if adjacent_players <=1:
+				expected_utility = cell_utility
+			else:
+				#sum the denomenator of the combination, store ncr in list to reuse later
+				ncr_list = [self.ncr(adjacent_players-1, player_number-1) for player_number in range(1, adjacent_players)]
+				denom = reduce(lambda x,y: x+y, ncr_list)
+				for current_player in range(1, adjacent_players):
+					numerator = ncr_list[current_player-1] #retrieve ncr value from list
+					expected_utility += ((numerator/denom)*(cell_utility/pow(current_player, 2)))
+
+			if (expected_utility > max_utility) and (expected_utility <= self.player_list[location][player_index].capacity):
+				max_utility = expected_utility
+				max_utility_cell = cell
+
+		return (max_utility_cell, max_utility)
 
 
 
 
 	def start_sim(self):
-		#global mode
-		#if mode != 'default':
+
 		self.default_mode()
 
 		if not self.player_list:
@@ -346,16 +383,21 @@ class GridWin(tk.Tk):
 			time.sleep(Settings.simulation_delay)
 			temp_dict = {}
 			for location, players in self.player_list.items():
-				for player in players:
+				for i, player in enumerate(players):
+
+
+					next_node = player.get_next()
 
 					#insert logic for game theory, 
 					if Settings.game_theory_algorithm:
-
-						next_node = self.GTA_next_node(location, player)
-					#else:
-					next_node = player.get_next()
+						expect_node, reward = self.GTA_next_node(location, i)
+						
+						if expect_node:
+							next_node = self.rowcol_to_junction[expect_node]
+							player = self.redirect_route(location, i, next_node, reward)
 
 					button_name = self.rowcol_to_junction[next_node]
+					
 					button_row, button_column = button_name.split('_')
 
 					if next_node == player.destination:
@@ -393,8 +435,14 @@ class GridWin(tk.Tk):
 			self.player_list = temp_dict
 			
 		print('simulation completed')
-		self.env_map.junctions[self.rowcol_to_junction['0_0']].number_players = 0 #after finish refresh the destination node to 0
+		self.reset_junction_players()
 
+
+	def reset_junction_players(self):
+		for i in range(self.row):
+			for j in range(self.column):
+				string_key = str(i) + '_' + str(j)
+				self.env_map.junctions[self.rowcol_to_junction[string_key]].number_players = 0
 
 
 
