@@ -192,7 +192,7 @@ class GridWin(tk.Tk):
 		start_sim_button.pack(expand=True, fill='both')
 
 
-		select_rewards = tk.Button(self.control_frame, text='choose rewards', command = self.spawn_reward_mode)
+		select_rewards = tk.Button(self.control_frame, text='Rewards', command = self.spawn_reward_mode)
 		select_rewards.pack(expand=True, fill='both')
 
 	def spawn_grid(self):
@@ -248,7 +248,10 @@ class GridWin(tk.Tk):
 		player_num = 0
 		adjacent_list = self.find_adjacent_cells(x_y)
 		for value in adjacent_list:
-			player_num +=len(self.player_list[value])
+			try:
+				player_num +=len(self.player_list[value])
+			except KeyError:
+				continue
 		return player_num
 
 	def remove_player(self, row, column, color):
@@ -308,6 +311,21 @@ class GridWin(tk.Tk):
 			self.grid_list[row][column].configure(bg='black')
 			self.grid_list[row][column].configure(text=self.env_map.junctions[self.rowcol_to_junction[string_key]].number_players)
 
+	def GTA_next_node(self, location, player):
+		cells = self.find_adjacent_cells(location)
+
+		max_utility = 0
+		max_ultility_cell = None
+
+		for cell in cells:
+			adjacent_players = self.find_adjacent_players(cell) #in jake's code this should return N-1
+			adjacent_players -=	1
+
+			if adjacent_players == 0:
+				pass
+
+			#reward_average = adjacent_players/
+
 
 
 
@@ -330,12 +348,17 @@ class GridWin(tk.Tk):
 			for location, players in self.player_list.items():
 				for player in players:
 
+					#insert logic for game theory, 
+					if Settings.game_theory_algorithm:
 
+						next_node = self.GTA_next_node(location, player)
+					#else:
 					next_node = player.get_next()
+
 					button_name = self.rowcol_to_junction[next_node]
 					button_row, button_column = button_name.split('_')
 
-					if next_node == player.node_path[-1]:
+					if next_node == player.destination:
 						print('player has arrived from ', self.rowcol_to_junction[player.start])
 						
 
@@ -363,6 +386,8 @@ class GridWin(tk.Tk):
 					self.grid_list[int(prev_button_row)][int(prev_button_column)].configure(bg='white')
 				else:
 					self.grid_list[int(prev_button_row)][int(prev_button_column)].configure(text=player_number)
+
+
 
 
 			self.player_list = temp_dict

@@ -16,7 +16,7 @@ class GridPlayer(object):
 		self.destination = destination
 		self.path = None
 		self.node_path = None
-		
+		self.capacity = 100
 	def get_next(self):
 
 		value= self.node_path[self.node_index]
