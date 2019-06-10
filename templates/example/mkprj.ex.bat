@@ -1,2 +1,2 @@
-python ../mkprj.py -d ./ -n grid4 -m test1
+python ../mkprj.py -d ./ -n dsmodel -m poi1 
 pause 
