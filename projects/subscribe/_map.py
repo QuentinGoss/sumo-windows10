@@ -74,28 +74,32 @@ class Map(object):
 		#print(row_col_dict)
 		return row_col_dict
 
-	def find_best_route(self, start, end):
+	#o(n^2) need to loop through all the edges that is connected to the node from and to
+	def find_best_route(self, start, end, weights=False):
 		if start == end:
 			return
+		weight_dict = {} #if weight is required, populate this dic with path weights
 		best_route = None
 		for start_edge in self.junctions[start].adjacent_edges_to:
 			for end_edge in self.junctions[end].adjacent_edges_from:
+				current_route = traci.simulation.findRoute(start_edge, end_edge)
 				if not best_route:
-					best_route = traci.simulation.findRoute(start_edge, end_edge)
+					best_route = current_route	
 				else:
-					current_route = traci.simulation.findRoute(start_edge, end_edge)
 					if current_route.travelTime < best_route.travelTime:
 						best_route = current_route
 
+				#if weights:
+					#current_route.edges[0].
 
-		#print(best_route)
+
+
 		return best_route
 
 
 
+
 		
-
-
 
 
 if __name__ =='__main__':
