@@ -14,7 +14,7 @@ from functools import reduce
 row = 11
 column = 11
 
-mode='default' #default, vehicle, reward
+mode='default' #default, reward
 
 
 
@@ -196,6 +196,9 @@ class GridWin(tk.Tk):
 		select_rewards = tk.Button(self.control_frame, text='Rewards', command = self.spawn_reward_mode)
 		select_rewards.pack(expand=True, fill='both')
 
+		clear_button = tk.Button(self.control_frame, text='clear', command=self.clear)
+		clear_button.pack(expand=True, fill='both')
+
 	def spawn_grid(self):
 		for i in range(row):
 			temp_list = []
@@ -329,7 +332,8 @@ class GridWin(tk.Tk):
 
 
 
-	def GTA_next_node(self, location, player_index):
+	def GTA_next_node(self, location, player_index, next_node):
+		#takes in the location at the car, the index of the player within the list, and the next default node for the vehicle path
 		cells = self.find_adjacent_cells(location)
 
 		max_utility = 0
@@ -352,9 +356,9 @@ class GridWin(tk.Tk):
 				expected_utility = cell_utility
 			else:
 				#sum the denomenator of the combination, store ncr in list to reuse later
-				ncr_list = [self.ncr(adjacent_players-1, player_number-1) for player_number in range(1, adjacent_players)]
-				denom = reduce(lambda x,y: x+y, ncr_list)
-				for current_player in range(1, adjacent_players):
+				ncr_list = [self.ncr(adjacent_players-1, player_number) for player_number in range(0, adjacent_players+1)] #consists of a list from 0
+				denom = reduce(lambda x,y: x+y, ncr_list[:-1]) #from 0 to second to last in list
+				for current_player in range(1, adjacent_players+1):
 					numerator = ncr_list[current_player-1] #retrieve ncr value from list
 					expected_utility += ((numerator/denom)*(cell_utility/pow(current_player, 2)))
 
@@ -362,15 +366,33 @@ class GridWin(tk.Tk):
 				max_utility = expected_utility
 				max_utility_cell = cell
 
+		#this part to generate the weighted random path
+
+		if not max_utility_cell:
+			#cell weight defined by putting more weight on
+			index_path_cell = cells.index(self.rowcol_to_junction[next_node])
+			average_weight = 1/len(cells)
+
+			#generate prob distribution find the average across all cells
+			prob_weight = [average_weight]*len(cells)
+			prob_weight = [x-Settings.weight_random_difference if index!=index_path_cell else x+((len(cells)-1)*Settings.weight_random_difference) for index, x in enumerate(prob_weight)]
+			selected_index = np.random.choice(len(cells), 1, p=prob_weight)
+			max_utility_cell = cells[selected_index[0]]
+
+
+			#this can be changed based on the travelTime for the different routes
+
+
 		return (max_utility_cell, max_utility)
 
 
 
 
 	def start_sim(self):
-
+		#simulation start
 		self.default_mode()
 
+		#if no predefined players, randomly spawn players
 		if not self.player_list:
 			for i in range(Settings.car_numbers):
 				row, column = randrange(self.row), randrange(self.column)
@@ -390,8 +412,7 @@ class GridWin(tk.Tk):
 
 					#insert logic for game theory, 
 					if Settings.game_theory_algorithm:
-						expect_node, reward = self.GTA_next_node(location, i)
-						
+						expect_node, reward = self.GTA_next_node(location, i, next_node)
 						if expect_node:
 							next_node = self.rowcol_to_junction[expect_node]
 							player = self.redirect_route(location, i, next_node, reward)
@@ -436,6 +457,16 @@ class GridWin(tk.Tk):
 			
 		print('simulation completed')
 		self.reset_junction_players()
+
+	def clear(self):
+		global mode
+		if mode == 'default':
+			self.player_list = {}
+			self.default_mode()
+		else:
+			self.reward_list = {}
+			mode='default'
+			self.spawn_reward_mode()
 
 
 	def reset_junction_players(self):
