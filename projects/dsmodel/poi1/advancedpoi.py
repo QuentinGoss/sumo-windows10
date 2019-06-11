@@ -18,20 +18,26 @@ class POIType():
 def xystring2float(s_xy):
     ls_xy = s_xy.split(',')
     return (float(ls_xy[0]),float(ls_xy[1]))
+    
+def colorstring2float(s_color):
+    s_color = s_color[s_color.index('(')+1:s_color.index(')')]
+    rgb = s_color.split(',')
+    return (rgb[0],rgb[1],rgb[2])
 
 # Parses a POI hotfile
 # @param hotfile = path to hotfile where pois are at
 def parse_hotfile(hotfile='poi.hot'):
     class POI():
-        def __init__(self,_id,_type,x,y):
-            self._id = _id
+        def __init__(self,_type,x,y,color):
             self._type = _type
             self.x = x
             self.y = y
+            self.color = color
             return
     pois = [] # Holds POIs
     
     _type = ''# Last seen type
+    color = (255,255,255)
     with open(hotfile,'r') as hf:
         for line in hf:
             # Clean up the line
@@ -48,23 +54,25 @@ def parse_hotfile(hotfile='poi.hot'):
                 continue
             
             if line.count(',') == 2:
-                # color
+                color = colorstring2float(line)
                 continue
                 
             # Line must be a coordinate
             if line.count(',') == 1:
                 x,y = xystring2float(line)
-                _id = "%s%s" % (_type,line)
-                pois.append(POI(_id,_type,x,y))
+                pois.append(POI(_type,x,y,color))
                 continue
             continue
     return pois
 
 # Things that are to be done on the initialize step.
+# @param traci = traci instance
 def initialize(traci):
     pois = parse_hotfile('poi.hot')
+    n_pois = 0
     for poi in pois:
-        traci.poi.add(poi._id,poi.x,poi.y,(255,0,0),poiType=poi._type)
+        traci.poi.add('poi%s' % (n_pois),poi.x,poi.y,poi.color,poiType=poi._type)
+        n_pois += 1
         continue
     return
 

@@ -25,6 +25,8 @@ def main():
     os.system('mkdir "%s"' % (options.output_dir))
     os.system('move .\\temp\\*.* %s' % (options.output_dir))
     os.system('rmdir temp')
+    print('Creating route and sumocg file.')
+    write_sumocfg_rou(options)
     print("Complete!")
     return
 
@@ -264,6 +266,17 @@ def write_edg_xml(edges):
             continue
         
         xml.write('</edges>')
+    return
+
+# Write Sumoconfig and Rout Files
+# @param options = command line arguments
+def write_sumocfg_rou(options):
+    sumocfg = """<configuration>\n\t<input>\n\t\t<net-file value="grid.net.xml" />\n\t\t<route-files value="grid.rou.xml" />\n\t</input>\n\t<time>\n\t\t<begin value="0" />\n\t\t<end value="3000000" />\n\t</time>\n</configuration>"""
+    routefile = """<routes>\n</routes>"""
+    with open('%s/grid.sumocfg' % (options.output_dir),'w') as f:
+        f.write(sumocfg)
+    with open('%s/grid.rou.xml' % (options.output_dir),'w') as f:
+        f.write(routefile)
     return
 
 main()
