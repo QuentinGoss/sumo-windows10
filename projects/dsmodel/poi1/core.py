@@ -28,7 +28,7 @@ def initialize(traci):
 # One pass of the loop == 1 timestep.
 ###############################
 def timestep(traci,n_step):
-
+    apoi.timestep(traci)
     return
 # end timestep
 
