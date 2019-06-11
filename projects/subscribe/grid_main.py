@@ -9,6 +9,7 @@ import numpy as np
 from scipy.stats import truncnorm
 from operator import mul
 from functools import reduce
+from postprocess import DataCapture
 
 
 row = 11
@@ -23,6 +24,9 @@ class GridWin(tk.Tk):
 		super(GridWin, self).__init__()
 		traci.start(["sumo", "-c", Settings.sumo_config])
 
+
+		self.cap = DataCapture(row, column)
+
 		w=self.winfo_screenwidth()
 		h=self.winfo_screenheight()
 		size = str(int(w/2))+'x'+str(int(h/2))
@@ -31,11 +35,18 @@ class GridWin(tk.Tk):
 
 		self.row = row
 		self.column = column
+
+		self.import_frame = tk.Frame(self, bg='green')
+		self.import_frame.pack(expand=True, fill='both')
+
 		self.grid_frame = tk.Frame(self, height=500, width=500, bg='red')
 		self.grid_frame.pack(expand=True, fill='both')
 
 		self.control_frame = tk.Frame(self, height=20, bg='blue')
 		self.control_frame.pack(expand=True, fill='both')
+
+
+
 
 
 			
@@ -92,6 +103,7 @@ class GridWin(tk.Tk):
 		global mode
 		if mode == 'default':
 			mode='reward'
+			self.select_rewards.configure(text='Select Vehicles')
 
 
 			for i in range(row):
@@ -114,6 +126,8 @@ class GridWin(tk.Tk):
 		else:
 			self.default_mode()
 			mode='default'
+			self.select_rewards.configure(text='Select Rewards')
+
 
 	def reward_remove(self, row, column):
 		string_key = str(row) + '_' + str(column)
@@ -193,8 +207,8 @@ class GridWin(tk.Tk):
 		start_sim_button.pack(expand=True, fill='both')
 
 
-		select_rewards = tk.Button(self.control_frame, text='Rewards', command = self.spawn_reward_mode)
-		select_rewards.pack(expand=True, fill='both')
+		self.select_rewards = tk.Button(self.control_frame, text='Select Rewards', command = self.spawn_reward_mode)
+		self.select_rewards.pack(expand=True, fill='both')
 
 		clear_button = tk.Button(self.control_frame, text='clear', command=self.clear)
 		clear_button.pack(expand=True, fill='both')
@@ -289,10 +303,6 @@ class GridWin(tk.Tk):
 	def add_player(self, row, column, max_num=None): # add player to dictionary and return a dict
 		string_key = str(row) + '_' + str(column)
 
-		#if max_num and (string_key in self.player_list):
-			#if len(self.player_list[string_key]) == max_num:
-				#the current cell reach the max number of vehicles
-			#	return
 
 		destination = Settings.destination
 		if destination =='random':
@@ -327,8 +337,6 @@ class GridWin(tk.Tk):
 
 		return player_instance
 
-			#print(self.player_list[location][player_index].node_path)
-
 
 
 
@@ -336,13 +344,15 @@ class GridWin(tk.Tk):
 		#takes in the location at the car, the index of the player within the list, and the next default node for the vehicle path
 		cells = self.find_adjacent_cells(location)
 
+		player_amount = 0 #need to determine how many players to share the reward with
 		max_utility = 0
 		max_utility_cell = None
 
 		for cell in cells:
 			adjacent_players = self.find_adjacent_players(cell) #in jake's code this should return N-1
+			assert adjacent_players > 0, f'player is {adjacent_players} failed'
 
-			cell_utility = 0   
+			cell_utility = 0  #total utility at that cell 
 			try:
 				cell_utility = self.reward_list[cell]
 				if cell_utility == 0:
@@ -356,8 +366,9 @@ class GridWin(tk.Tk):
 				expected_utility = cell_utility
 			else:
 				#sum the denomenator of the combination, store ncr in list to reuse later
-				ncr_list = [self.ncr(adjacent_players-1, player_number) for player_number in range(0, adjacent_players+1)] #consists of a list from 0
-				denom = reduce(lambda x,y: x+y, ncr_list[:-1]) #from 0 to second to last in list
+				ncr_list = [self.ncr(adjacent_players-1, player_number) for player_number in range(0, adjacent_players)] #consists of a list from 0
+				denom = reduce(lambda x,y: x+y, ncr_list) #from 0 to second to last in list
+
 				for current_player in range(1, adjacent_players+1):
 					numerator = ncr_list[current_player-1] #retrieve ncr value from list
 					expected_utility += ((numerator/denom)*(cell_utility/pow(current_player, 2)))
@@ -365,11 +376,15 @@ class GridWin(tk.Tk):
 			if (expected_utility > max_utility) and (expected_utility <= self.player_list[location][player_index].capacity):
 				max_utility = expected_utility
 				max_utility_cell = cell
+				player_amount = adjacent_players
 
 		#this part to generate the weighted random path
 
 		if not max_utility_cell:
 			#cell weight defined by putting more weight on
+			#give higher weights to those cells havent visited
+			#give higher weights to those path with smallest cost
+			#move dejst here
 			index_path_cell = cells.index(self.rowcol_to_junction[next_node])
 			average_weight = 1/len(cells)
 
@@ -380,7 +395,9 @@ class GridWin(tk.Tk):
 			max_utility_cell = cells[selected_index[0]]
 
 
-			#this can be changed based on the travelTime for the different routes
+		else:
+			max_utility /= player_amount
+
 
 
 		return (max_utility_cell, max_utility)
@@ -413,9 +430,13 @@ class GridWin(tk.Tk):
 					#insert logic for game theory, 
 					if Settings.game_theory_algorithm:
 						expect_node, reward = self.GTA_next_node(location, i, next_node)
-						if expect_node:
+						if expect_node: #if node return none, which means either capacity cant handle any cell reward or there are no rewards doesnt run
+							#the only time this run is when the expected node is returned not none, 2 cases, either redirected based on rewards or redirected based on random weights
 							next_node = self.rowcol_to_junction[expect_node]
 							player = self.redirect_route(location, i, next_node, reward)
+
+					player.node_hit.append(next_node)
+					player.reward_hit.append(player.capacity)
 
 					button_name = self.rowcol_to_junction[next_node]
 					
@@ -423,7 +444,7 @@ class GridWin(tk.Tk):
 
 					if next_node == player.destination:
 						print('player has arrived from ', self.rowcol_to_junction[player.start])
-						
+						self.cap.player_list.append(player) #add player to the post processing list
 
 					else:
 						#if final destination is not reached add it to the temp dict
@@ -458,14 +479,16 @@ class GridWin(tk.Tk):
 		print('simulation completed')
 		self.reset_junction_players()
 
+		print(self.cap.player_list)
+
 	def clear(self):
 		global mode
 		if mode == 'default':
 			self.player_list = {}
 			self.default_mode()
 		else:
-			self.reward_list = {}
 			mode='default'
+			self.reward_list = {}
 			self.spawn_reward_mode()
 
 

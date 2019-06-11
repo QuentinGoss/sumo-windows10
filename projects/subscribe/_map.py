@@ -89,8 +89,14 @@ class Map(object):
 					if current_route.travelTime < best_route.travelTime:
 						best_route = current_route
 
-				#if weights:
-					#current_route.edges[0].
+				if weights:
+					if current_route.edges[0] in weight_dict:
+						weight_dict[current_route.edges[0]] = min(current_route.edges.travelTime, weight_dict[current_route.edges[0]])
+					else:
+						weight_dict[current_route.edges[0]] = current_route.edges.travelTime
+
+		if weights:
+			return weight_dict
 
 
 
