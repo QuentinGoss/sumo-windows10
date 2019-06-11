@@ -1,6 +1,7 @@
 # advancedpoi.py
 # Author: Quentin Goss
 # A library for doing usefull things with POIs.
+import os
 
 class POIType():
     def __init__(self,name):
@@ -65,16 +66,46 @@ def parse_hotfile(hotfile='poi.hot'):
             continue
     return pois
 
-# Things that are to be done on the initialize step.
+# Parses through the poi hotfile and adds pois with traci
 # @param traci = traci instance
-def initialize(traci):
-    pois = parse_hotfile('poi.hot')
+global HIST_SZ
+def poi_parse_and_place(traci):
+    hotfile = 'poi.hot'
+    pois = parse_hotfile(hotfile)
     n_pois = 0
     for poi in pois:
         traci.poi.add('poi%s' % (n_pois),poi.x,poi.y,poi.color,poiType=poi._type)
         n_pois += 1
         continue
+    global HIST_SZ
+    HIST_SZ = os.stat(hotfile).st_size
     return
+
+# Remove all pois from traci
+# @param traci = traci instance
+def remove_all_pois(traci):
+    poi_ids = traci.poi.getIDList()
+    for poi in poi_ids:
+        traci.poi.remove(poi)
+    return
+
+# Things that are to be done on the initialize step.
+# @param traci = traci instance
+def initialize(traci):
+    poi_parse_and_place(traci)
+    return
+
+# Things that happen every timestep
+# @param traci = traci instance
+def timestep(traci):
+    hotfile = 'poi.hot'
+    new_sz = os.stat(hotfile).st_size
+    global HIST_SZ
+    if HIST_SZ != new_sz:
+        remove_all_pois(traci)
+        poi_parse_and_place(traci)
+    return
+
 
 def test():
     import time; import os
