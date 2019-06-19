@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn
+#import seaborn
 import json
 class DataCapture(object):
 	def __init__(self, row, column, json_file = None):

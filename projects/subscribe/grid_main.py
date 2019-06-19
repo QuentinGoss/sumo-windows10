@@ -12,8 +12,8 @@ from functools import reduce
 from postprocess import DataCapture
 
 
-row = 11
-column = 11
+row = 21
+column = 10
 
 mode='default' #default, reward
 
@@ -51,7 +51,7 @@ class GridWin(tk.Tk):
 
 			
 		self.grid_list = [] #store all the buttons in grid
-		self.env_map = Map()
+		#self.env_map = Map()
 		self.rowcol_to_junction = self.env_map.row_col(self.row, self.column) #value is the junction id and key is row_col
 		self.rowcol_to_junction.update(dict((v, k) for k, v in self.rowcol_to_junction.items()))
 		self.player_list = {} #stores location as key, player object as value
