@@ -4,74 +4,55 @@ import heapq
 from _map import Map
 import traci.constants as tc
 from random import choice, randrange
+from settings import Settings
+from multiprocessing import cpu_count, Manager, Queue, Pool
 import traci
+
 
 class Environment(object):
 	def __init__(self):
-		self.player_data = {}
-		self.map_data = Map()
-		self.rewards = {}
+		self.map_data = Map(Settings.sumo_config)
+		self.player_list = {}
+		self.junction_list = {k:dict() for k in self.map_data.junctions.keys()}
+		self.rewards_list = {}
+		
 		self.index_counter = 0
 
-	def distribute_rewards(self):
-		pass
 
-	def initial(self):
-		self.initial_route_random(100)
+		self.player_location_array = None #array storing location
 
+	def add_player(self, veh_id, routes):
+		if not veh_id in self.player_list:
+			assert self.index_counter == int(veh_id.split('_')[1]), 'player id doesnt match counter'
+			self.player_list[veh_id] = Player(veh_id, routes, self.map_data.edges[routes[0]]._from)
+			self.index_counter+=1
+		else:
+			self.player_list[veh_id].modify(routes)
 
-	def initial_route_random(self, amount):
-		list_edges = [x for x in traci.edge.getIDList() if not ':' in x]
-		#print(list_edges)
-		for i in range(amount):
-			traci.route.add('route'+str(i), [choice(list_edges) for _ in range(2)])
-			traci.vehicle.add('veh'+str(i), 'route'+str(i), typeID='chevy_s10',departLane='random')
-			#route = traci.simulation.findRoute(traci.route.getEdges('route'+str(i))[0], traci.route.getEdges('route'+str(i))[1])
-			#print(route.edges)
+	def process_junction(self): #this function should be parallelized
+		junct_data =traci.junction.getAllContextSubscriptionResults()
+		for key, value in junct_data.items():
+			for veh, veh_value in value.items():
+				#vehicle_info = traci.vehicle.getSubscriptionResults(veh)
+				if not veh in self.junction_list[key] and self.player_list[veh].prev_junction != key:
+					print(f'vehicle {veh} just entered in junction {key}')
+					self.process_player(veh, veh_value, key)
+					self.junction_list[key][veh] = veh_value
 
+				elif veh in self.junction_list[key] and self.player_list[veh].prev_junction != key:
+					#check if it should delete vehicle
+					try:
+						if self.map_data.edges[veh_value[tc.VAR_ROAD_ID]]._to != key:
+							#print('vehicle left junction')
+							self.player_list[veh].prev_junction = key
+							del self.junction_list[key][veh]
+					except KeyError:
+						#print('reached junction')
+						continue
 
-
-
-
-
-	def populate_players(self, data):
-		arrived_list = traci.simulation.getArrivedIDList()
-		for key, value in data.items():
-
-			if key in self.player_data:
-				#traci.vehicle.setColor(key,(255, 255, 255))
-				if key in arrived_list:
-					del self.player_data[key]
-				else:
-					self.modify_object(key, value)
-			else:
-
-				self.player_data[key] = Player(self.index_counter, value[tc.VAR_POSITION], value[tc.VAR_EDGES][-1], value[tc.VAR_SPEED], value[tc.VAR_ROAD_ID])
-				self.index_counter+=1
-				#traci.vehicle.setColor(key,(randrange(255), randrange(255), randrange(255)))
-
-
-	def modify_object(self, key, value):
-		self.player_data[key].coord = value[tc.VAR_POSITION]
-		self.player_data[key].speed = value[tc.VAR_SPEED]
-		self.player_data[key].destination = value[tc.VAR_EDGES][-1]
-
-
-	
-	def generate_elements(self):
-		s_elements = "\t" + config.s_vtype + "\n"
-		return s_elements
-
-	@staticmethod
-	def generate_routefile(self): 
-		with open(config.s_route_file,"w") as routes:
-			print("<routes>", file=routes)
-			s_elements = self.generate_elements()
-			print(s_elements, file=routes)
-			print("</routes>", file=routes)
-
-
-			
+	def process_player(self, veh_id, veh_value, key):
+		print(self.map_data.junctions[key].adjacent_junctions)
+		print(self.map_data.find_adjacent_cells(key))
 
 
 

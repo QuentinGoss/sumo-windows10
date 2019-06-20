@@ -9,8 +9,11 @@ import numpy as np
 from scipy.stats import truncnorm
 from operator import mul
 from functools import reduce
-from postprocess import DataCapture
-
+from postprocess import DataCapture, MultiCapture
+from math import exp
+import pickle
+import os
+import datetime
 
 row = 11
 column = 11
@@ -25,24 +28,22 @@ class GridWin(tk.Tk):
 		traci.start(["sumo", "-c", Settings.sumo_config])
 
 
-		self.cap = DataCapture(row, column)
-
 		w=self.winfo_screenwidth()
 		h=self.winfo_screenheight()
 		size = str(int(w/2))+'x'+str(int(h/2))
-		print(size)
+		#print(size)
 		self.geometry(size)
 
 		self.row = row
 		self.column = column
 
 		self.import_frame = tk.Frame(self, bg='green')
-		self.import_frame.pack(expand=True, fill='both')
+		#self.import_frame.pack(expand=True, fill='both')
 
 		self.grid_frame = tk.Frame(self, height=500, width=500, bg='red')
 		self.grid_frame.pack(expand=True, fill='both')
 
-		self.control_frame = tk.Frame(self, height=20, bg='blue')
+		self.control_frame = tk.Frame(self)
 		self.control_frame.pack(expand=True, fill='both')
 
 
@@ -51,7 +52,7 @@ class GridWin(tk.Tk):
 
 			
 		self.grid_list = [] #store all the buttons in grid
-		self.env_map = Map()
+		self.env_map = Map(Settings.sumo_config)
 		self.rowcol_to_junction = self.env_map.row_col(self.row, self.column) #value is the junction id and key is row_col
 		self.rowcol_to_junction.update(dict((v, k) for k, v in self.rowcol_to_junction.items()))
 		self.player_list = {} #stores location as key, player object as value
@@ -85,7 +86,7 @@ class GridWin(tk.Tk):
 
 
 
-				self.grid_list[i][j].configure(command = lambda i=i, j=j: self.add_player(i, j, max_num=1))
+				self.grid_list[i][j].configure(command = lambda i=i, j=j: self.add_player(i, j))
 				self.grid_list[i][j].bind('<Button-3>', lambda event, a=i, b=j, color=self.default_button_color: self.remove_player(a, b, color))
 				self.grid_list[i][j].bind('<Button-2>', lambda event, a=i, b=j: self.normal_distribute_players(a,b))
 				self.grid_list[i][j].configure(fg='white')
@@ -203,15 +204,60 @@ class GridWin(tk.Tk):
 		return truncnorm((low - mean) / sd, (upp - mean) / sd, loc=mean, scale=sd)
 
 	def control_buttons(self):
-		start_sim_button = tk.Button(self.control_frame, text='start simulation', command=self.start_sim)
-		start_sim_button.pack(expand=True, fill='both')
+		for row in range(2):
+			for column in range(3):
+				self.control_frame.grid_columnconfigure(column, weight=1)
+				self.control_frame.grid_rowconfigure(row, weight=1)
+
+		start_sim_button = tk.Button(self.control_frame, text='START', command=self.simulation)
+		start_sim_button.grid(row=0, column=1, sticky=tk.N+tk.S+tk.W+tk.E)
 
 
 		self.select_rewards = tk.Button(self.control_frame, text='Select Rewards', command = self.spawn_reward_mode)
-		self.select_rewards.pack(expand=True, fill='both')
+		self.select_rewards.grid(row=0, column=0, sticky=tk.N+tk.S+tk.W+tk.E)
 
-		clear_button = tk.Button(self.control_frame, text='clear', command=self.clear)
-		clear_button.pack(expand=True, fill='both')
+		clear_button = tk.Button(self.control_frame, text='CLEAR', command=self.clear)
+		clear_button.grid(row=0, column=2,sticky=tk.N+tk.S+tk.W+tk.E)
+
+		self.replay_button = tk.Button(self.control_frame, text='Replay Simulation', command=self.replay_simulation)
+		self.replay_button.grid(row=1, column=1,sticky=tk.N+tk.S+tk.W+tk.E)
+
+		self.save_button = tk.Button(self.control_frame, text='Save Simulation', command=self.save_simulation)
+		self.save_button.grid(row=1, column=0,sticky=tk.N+tk.S+tk.W+tk.E)
+
+		self.load_button = tk.Button(self.control_frame, text='Load Simulation', command=self.load_simulation)
+		self.load_button.grid(row=1, column=2,sticky=tk.N+tk.S+tk.W+tk.E)
+
+
+	def load_simulation(self):
+		with open(Settings.sim_save, 'rb') as config_dictionary_file:
+			self.cap = pickle.load(config_dictionary_file)
+		print('simulation load sucess...')
+		self.replay_simulation(load=True)
+
+
+	def replay_simulation(self, load=False):
+		for value in self.cap.player_list:
+			new_player = GridPlayer(value.start, value.destination)
+			row, column = self.rowcol_to_junction[value.start].split('_')
+			if load:
+				new_player.node_path = value.node_hit
+				self.add_player(int(row), int(column), new_player)
+			else:
+				self.add_player(int(row), int(column))
+
+		self.cap.player_list=[]
+
+		self.start_sim(replay=True, load=load)
+
+
+	def save_simulation(self):
+		if not self.cap:
+			print('No recent simulation, please run sim before save')
+			return
+		with open(Settings.sim_save, 'wb') as config_dictionary_file:
+			pickle.dump(self.cap, config_dictionary_file)
+		print('simulation saved success...')
 
 	def spawn_grid(self):
 		for i in range(row):
@@ -227,45 +273,17 @@ class GridWin(tk.Tk):
 		self.default_mode()
 
 
-	def find_adjacent_cells(self, x_y):
-		adjacent_list = []
-		button_name = x_y.split('_')
-		x, y = int(button_name[0]), int(button_name[1])
+	def find_adjacent_cells(self, x_y): #this function need to change to be determined using sumo
+		adjacent_list_sumo = [self.rowcol_to_junction[x] for x in self.env_map.find_adjacent_cells(self.rowcol_to_junction[x_y])]
+		return adjacent_list_sumo
 
 
-		if ('_'.join([str(x+1), str(y+1)])) in self.rowcol_to_junction:
-			adjacent_list.append('_'.join([str(x+1), str(y+1)]))
-
-
-		if ('_'.join([str(x), str(y+1)])) in self.rowcol_to_junction:
-			adjacent_list.append('_'.join([str(x), str(y+1)]))
-
-
-		if ('_'.join([str(x+1), str(y)])) in self.rowcol_to_junction:
-			adjacent_list.append('_'.join([str(x+1), str(y)]))
-
-		if ('_'.join([str(x-1), str(y+1)])) in self.rowcol_to_junction:
-			adjacent_list.append('_'.join([str(x-1), str(y+1)]))
-
-		if ('_'.join([str(x+1), str(y-1)])) in self.rowcol_to_junction:
-			adjacent_list.append('_'.join([str(x+1), str(y-1)]))
-
-		if ('_'.join([str(x-1), str(y-1)])) in self.rowcol_to_junction:
-			adjacent_list.append('_'.join([str(x-1), str(y-1)]))
-
-
-		if ('_'.join([str(x-1), str(y)])) in self.rowcol_to_junction:
-			adjacent_list.append('_'.join([str(x-1), str(y)]))
-
-		if ('_'.join([str(x), str(y-1)])) in self.rowcol_to_junction:
-			adjacent_list.append('_'.join([str(x), str(y-1)]))
-
-		return adjacent_list
 
 	def find_adjacent_players(self, x_y):
 		player_num = 0
 		adjacent_list = self.find_adjacent_cells(x_y)
 		for value in adjacent_list:
+			
 			try:
 				player_num +=len(self.player_list[value])
 			except KeyError:
@@ -294,13 +312,12 @@ class GridWin(tk.Tk):
 
 
 
-
 		except KeyError:
 			#try to delete  vehicle that doesnt exist
 			pass
 
 
-	def add_player(self, row, column, max_num=None): # add player to dictionary and return a dict
+	def add_player(self, row, column, player=None): # add player to dictionary and return a dict
 		string_key = str(row) + '_' + str(column)
 
 
@@ -308,43 +325,58 @@ class GridWin(tk.Tk):
 		if destination =='random':
 			destination = str(randrange(self.row))+'_'+str(randrange(self.column))
 
+		if string_key == destination:
+			return False
 
-		player_instance = GridPlayer(self.rowcol_to_junction[string_key], self.rowcol_to_junction[destination])
-		if player_instance.start != player_instance.destination:
+		if player:
+			player_instance = player
+		else:
+			player_instance = GridPlayer(self.rowcol_to_junction[string_key], self.rowcol_to_junction[destination])
 			player_instance.path = self.env_map.find_best_route(player_instance.start, player_instance.destination)
+			if not player_instance.path:
+				return False
 			player_instance.node_path = [self.env_map.edges[x]._to for x in player_instance.path.edges]
 
-
-			if string_key in self.player_list:
-				self.player_list[string_key].append(player_instance)
-			else:
-				self.player_list[string_key] = [player_instance]
+		player_instance.capacity = self.get_truncated_normal(Settings.player_reward_random[0], Settings.player_reward_random[1], 0, Settings.player_reward_random[0]*2).rvs(1)[0]
+		print('plyer capacity is: ', player_instance.capacity)
 
 
-			self.env_map.junctions[self.rowcol_to_junction[string_key]].number_players += 1
+		if string_key in self.player_list:
+			self.player_list[string_key].append(player_instance)
+		else:
+			self.player_list[string_key] = [player_instance]
 
-			self.grid_list[row][column].configure(bg='black')
-			self.grid_list[row][column].configure(text=self.env_map.junctions[self.rowcol_to_junction[string_key]].number_players)
 
 
-	def redirect_route(self, location, player_index, next_node, reward):
-		player_instance = self.player_list[location][player_index]
-		if next_node != player_instance.destination:
-			player_instance.path = self.env_map.find_best_route(next_node, player_instance.destination)
+		self.env_map.junctions[self.rowcol_to_junction[string_key]].number_players += 1
+
+
+		self.grid_list[row][column].configure(bg='black')
+		self.grid_list[row][column].configure(text=self.env_map.junctions[self.rowcol_to_junction[string_key]].number_players)
+		return True
+
+
+	def redirect_route(self, player_instance, new_route):
+		if new_route[0] != player_instance.destination:
+			player_instance.path = new_route # self.env_map.find_best_route(next_node, player_instance.destination)
 			player_instance.node_path = [self.env_map.edges[x]._to for x in player_instance.path.edges]
 			player_instance.node_index=0
-			player_instance.capacity -= reward
 
 		return player_instance
 
+	def compute_sensing_plan(self, player_amount, reward, cost):
+		return ((player_amount-1)*reward)/((player_amount**2)*cost)
 
 
 
-	def GTA_next_node(self, location, player_index, next_node):
-		#takes in the location at the car, the index of the player within the list, and the next default node for the vehicle path
+	def GTA_next_node(self, location, player_instance, current_node, next_node):
+		#takes in location, player, and next node return new next node and player instance
 		cells = self.find_adjacent_cells(location)
 
-		player_amount = 0 #need to determine how many players to share the reward with
+		new_route = player_instance.path
+
+		#print('new route is ', new_route)
+
 		max_utility = 0
 		max_utility_cell = None
 
@@ -361,9 +393,12 @@ class GridWin(tk.Tk):
 				continue
 
 			expected_utility = 0
+			expected_sensing_plan = 0
+
 
 			if adjacent_players <=1:
 				expected_utility = cell_utility
+				expected_sensing_plan = player_instance.cost
 			else:
 				#sum the denomenator of the combination, store ncr in list to reuse later
 				ncr_list = [self.ncr(adjacent_players-1, player_number) for player_number in range(0, adjacent_players)] #consists of a list from 0
@@ -371,53 +406,103 @@ class GridWin(tk.Tk):
 
 				for current_player in range(1, adjacent_players+1):
 					numerator = ncr_list[current_player-1] #retrieve ncr value from list
-					expected_utility += ((numerator/denom)*(cell_utility/pow(current_player, 2)))
+					prM = numerator/denom
+					expected_utility += (prM*(cell_utility/pow(current_player, 2)))
+					expected_sensing_plan += (prM*(self.compute_sensing_plan(current_player, self.reward_list[cell], player_instance.cost)))
+			if (expected_utility > max_utility) and (expected_sensing_plan <= player_instance.capacity):
 
-			if (expected_utility > max_utility) and (expected_utility <= self.player_list[location][player_index].capacity):
+				#print(f'expected sp is {expected_sensing_plan}, capacity {player_instance.capacity}')
+
 				max_utility = expected_utility
 				max_utility_cell = cell
-				player_amount = adjacent_players
+
+				#print(f'chosen cell {max_utility_cell}, ultility value is {max_utility}, current player capacity is {player_instance.capacity}')
+
+		
+
 
 		#this part to generate the weighted random path
 
-		if not max_utility_cell:
+		if not max_utility_cell: #if ultilit cell is none
 			#cell weight defined by putting more weight on
 			#give higher weights to those cells havent visited
 			#give higher weights to those path with smallest cost
-			#move dejst here
-			index_path_cell = cells.index(self.rowcol_to_junction[next_node])
-			average_weight = 1/len(cells)
+			#if reward too low use weighted random?
 
-			#generate prob distribution find the average across all cells
-			prob_weight = [average_weight]*len(cells)
-			prob_weight = [x-Settings.weight_random_difference if index!=index_path_cell else x+((len(cells)-1)*Settings.weight_random_difference) for index, x in enumerate(prob_weight)]
-			selected_index = np.random.choice(len(cells), 1, p=prob_weight)
-			max_utility_cell = cells[selected_index[0]]
+			
+			weight_dict, best_route = self.env_map.find_best_route(current_node, player_instance.destination, weights=True)
+			try:
+				total_sum = reduce(lambda x,y:x+y,[exp(Settings.theta_random/x.travelTime) for x in weight_dict.values()])
+				prob_distribute = [exp(Settings.theta_random/x.travelTime)/total_sum for x in weight_dict.values()]
 
+				#print('prob_distribute ', prob_distribute)
+				#print('max value is {}, index value is {}, the next cell is {}, current cell is {}'.format(max(prob_distribute), prob_distribute.index(max(prob_distribute)), self.rowcol_to_junction[list(weight_dict.keys())[prob_distribute.index(max(prob_distribute))]], self.rowcol_to_junction[current_node]))
+
+
+				selected_index = np.random.choice(len(cells), 1, p=prob_distribute)
+				next_node = list(weight_dict.keys())[selected_index[0]]
+
+			except OverflowError:
+				#when theta random value is too large just take the best route node
+				next_node = self.env_map.edges[best_route.edges[0]]._to
+
+
+			player_instance.expected_reward = 0
 
 		else:
-			max_utility /= player_amount
+			player_instance.expected_reward = max_utility
+			next_node = self.rowcol_to_junction[max_utility_cell]
+
+
+		player_instance = self.redirect_route(player_instance, new_route)
+
+		return next_node, player_instance
+
+
+	def simulation(self):
+		multi_data = MultiCapture('Traffic Simulation')
+		i=0
+		while i < Settings.simulation_steps:
+			print('iteration ', i)
+			suc = self.start_sim()
+			if suc:
+				cov = self.cap.calculate_coverage()
+				print('coverage is ', cov)
+				multi_data.simulation_list.append(cov)
+				i+=1
+				if i%100 ==0:
+					multi_data.plot(os.path.join(Settings.plot_path,f'step{i}_rewards.png'))
+			else:
+				break
+			
+
+
+		
 
 
 
-		return (max_utility_cell, max_utility)
 
+	def start_sim(self, replay=False, load=False):
 
-
-
-	def start_sim(self):
 		#simulation start
 		self.default_mode()
 
+		if not replay: self.cap = DataCapture(self.row, self.column) #reset if its not replay
+
 		#if no predefined players, randomly spawn players
 		if not self.player_list:
-			for i in range(Settings.car_numbers):
+			i = 0
+			while i < Settings.car_numbers:
 				row, column = randrange(self.row), randrange(self.column)
-				self.add_player(row, column)
-
+				suc = self.add_player(row, column)
+				if suc:
+					i +=1
+					
 
 		while self.player_list:
 			
+			
+
 			self.update()
 			time.sleep(Settings.simulation_delay)
 			temp_dict = {}
@@ -426,24 +511,22 @@ class GridWin(tk.Tk):
 
 
 					next_node = player.get_next()
+					#junction value in sumo
 
 					#insert logic for game theory, 
-					if Settings.game_theory_algorithm:
-						expect_node, reward = self.GTA_next_node(location, i, next_node)
-						if expect_node: #if node return none, which means either capacity cant handle any cell reward or there are no rewards doesnt run
-							#the only time this run is when the expected node is returned not none, 2 cases, either redirected based on rewards or redirected based on random weights
-							next_node = self.rowcol_to_junction[expect_node]
-							player = self.redirect_route(location, i, next_node, reward)
+					if Settings.game_theory_algorithm and not load:
+						next_node, player = self.GTA_next_node(location, player, self.rowcol_to_junction[location], self.rowcol_to_junction[next_node])
 
-					player.node_hit.append(next_node)
-					player.reward_hit.append(player.capacity)
+
+					player.node_hit.append(next_node) # for post processing
+					player.reward_hit.append(player.capacity) # for post processing
 
 					button_name = self.rowcol_to_junction[next_node]
 					
 					button_row, button_column = button_name.split('_')
 
 					if next_node == player.destination:
-						print('player has arrived from ', self.rowcol_to_junction[player.start])
+						#print('player has arrived from ', self.rowcol_to_junction[player.start])
 						self.cap.player_list.append(player) #add player to the post processing list
 
 					else:
@@ -462,7 +545,6 @@ class GridWin(tk.Tk):
 					self.grid_list[int(button_row)][int(button_column)].configure(text=self.env_map.junctions[self.rowcol_to_junction[button_name]].number_players)
 
 
-
 				#every time a player move away check if the edge contains more players
 				player_number = self.env_map.junctions[self.rowcol_to_junction[location]].number_players
 				prev_button_row, prev_button_column = location.split('_')
@@ -472,14 +554,43 @@ class GridWin(tk.Tk):
 					self.grid_list[int(prev_button_row)][int(prev_button_column)].configure(text=player_number)
 
 
-
-
 			self.player_list = temp_dict
+
+			for location, players in self.player_list.items():
+				for i, player in enumerate(players):
+					try:
+						self.player_list[location][i].reward += (self.reward_list[location]/len(self.player_list[location]))
+						player_sensing_plan = self.compute_sensing_plan(len(self.player_list[location]), self.reward_list[location], player.cost)
+						
+						#whats the default expected sensing plan when there is only 1 player?? 
+						if self.reward_list[location] != 0:
+							# if you arrived and your cost is more than your player capacity might as well take what ever your capactiy can handle
+							if player_sensing_plan <= player.capacity:
+								if player_sensing_plan == 0 and player.cost > player.capacity:
+									player_sensing_plan = player.capacity
+								elif player_sensing_plan == 0 and player.cost <= player.capacity:
+									player_sensing_plan = player.cost
+				
+
+							print(f'player sensing plan value is {player_sensing_plan}, capacity is {player.capacity}')
+							self.player_list[location][i].capacity -= player_sensing_plan
+
+						
+
+					except KeyError as e:
+						continue
+
+
+			
+
 			
 		print('simulation completed')
 		self.reset_junction_players()
 
-		print(self.cap.player_list)
+
+		return True
+
+
 
 	def clear(self):
 		global mode
