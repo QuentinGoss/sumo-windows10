@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn
+#import seaborn
 import json
 from operator import attrgetter
 class DataCapture(object): #object per simulation

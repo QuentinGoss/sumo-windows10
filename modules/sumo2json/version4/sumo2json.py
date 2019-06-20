@@ -203,7 +203,7 @@ def normalize_coords():
     global N_EDGES
     global N_VERTEX
     global BOUNDS
-    n = 1
+    n = 0
     for v in VERTEX:
         v.coords_norm = [normalize(v.coords_true[0],BOUNDS[1][0],BOUNDS[0][0]),normalize(v.coords_true[1],BOUNDS[1][1],BOUNDS[0][1])]
         print("Normalizing Vertices %6.2f%%" % (float(n)/float(N_VERTEX) * 100),end='\r')
