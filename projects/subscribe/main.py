@@ -7,28 +7,28 @@ from random import choice
 sys.path.append("./../")
 from traci_env import EnvironmentListener
 
-print(traci.__file__)
-
-#sumo_path = os.path.join(Settings.default, Settings.sumo_config)
-
-traci.start(["sumo-gui", "-c", Settings.sumo_config])
-
-#print(traci.simulation.findRoute('cell0_0N', 'cell9_9E'))
 
 
-#initialize(traci)
-n_step = 0
-env = EnvironmentListener()
 
-while True:
+def start_simulation():
 
-	traci.simulationStep()
-	traci.addStepListener(env)
-	#timestep(traci,n_step)
-	n_step+=1
+	n_step = 0
+	env = EnvironmentListener()
+
+	while True:
+
+		traci.simulationStep()
+		traci.addStepListener(env)
+		n_step+=1
 
 
-traci.close()
+	traci.close()
+
+if __name__ == '__main__':
+	print(traci.__file__)
+	traci.start(["sumo-gui", "-c", Settings.sumo_config])
+	start_simulation()
+
 
 
 
