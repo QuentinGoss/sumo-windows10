@@ -9,6 +9,8 @@ class Player(object):
 		self.current_edge = routes[0]
 		self.capacity = 100
 		self.prev_junction = passed_junction
+		self.reward = 0
+		self.cost = 5
 		
 	def modify(self, routes):
 		#this for when updating players
@@ -30,6 +32,7 @@ class GridPlayer(object):
 		self.cost = 5
 
 	def get_next(self):
+		#print(self.node_path, self.node_index)
 		value= self.node_path[self.node_index]
 		self.node_index+=1
 		return value
@@ -37,5 +40,5 @@ class GridPlayer(object):
 
 	def __repr__(self):
 		#return repr((self.start, self.destination, self.node_hit, self.reward_hit))
-		return repr((self.capacity))
+		return repr((self.start, self.destination))
 

@@ -1,21 +1,38 @@
 import os
+
 class Settings(object):
 	default = os.path.abspath('./../')
-	sumo_config = os.path.join(default, "grid5/data/grid5.sumocfg")
+	#sumo_config = os.path.join(default, "grid4/data/grid4.sumocfg")
+	sumo_config = os.path.join(default, "Haines_City/data/100/Haines_City.100.sumocfg")
+
+	sim_config_load_path = None
+
 
 	sim_save = os.path.join(default, "subscribe/simulations/recent.sim")
 	plot_path = os.path.join(default, "subscribe/simulations/plots")
 	
-	car_numbers = 10  #set the random amount to spawn when no prev defined cars
+	car_numbers = 100  #set the random amount to spawn when no prev defined cars
 	simulation_delay = 0 #delay for visualization, 0 runs fast
 	game_theory_algorithm =True #enable and disable game_theory algorithm for comparision
-	destination = '0_0' #'random' #set to 0 row and 0 column, can be set to 'random'
+	destination = 'random' #'random' #set to 0 row and 0 column, can be set to 'random'
 	theta_random = 1000  #uses softmax to determine prob, higher this value the less random it is
-	simulation_steps = 1000 #how many times to repeat simulation
+	simulation_steps = 1 #how many times to repeat simulation
 	player_reward_random = (100, 0.1) #mean,std
+
+
+	def parse_settings(file):
+		with open(file, 'r') as f:
+			data= f.read()
+			print(data)
+
 
 class GraphSetting(Settings):
 	edge_speed_std = 0.5 #standard deviation for edge
+	destination='gneJ49'
+
+
+
+
 
 		
 

@@ -3,6 +3,7 @@ import traci.constants as tc
 from env import Environment
 from random import choice
 import math
+from settings import GraphSetting
 #env is for storing data contains map and players
 #try to keep all traci calls in here
 
@@ -12,17 +13,23 @@ class EnvironmentListener(traci.StepListener):
 		super(EnvironmentListener, self).__init__()
 		self.sim_env = Environment()
 
-		self.initial_route_random(1)
+		self.initial_route_random(100)
 		self.junction_sub()
 		
 
 	def initial_route_random(self, amount):
 
 		list_edges = list(self.sim_env.map_data.edges)
+		list_juncts = list(self.sim_env.map_data.junctions)
 		for i in range(amount):
 			veh_id = 'veh_'+str(i)
 			route_id = 'route_'+str(i)
-			traci.route.add(route_id, [choice(list_edges) for _ in range(2)])
+			#traci.route.add(route_id, [choice(list_edges) for _ in range(2)])	
+			#traci.route.add(route_id, [choice(list_edges), '-cell0_0N'])
+			end = GraphSetting.destination
+			start = choice(list_juncts)
+			while start==end: start=choice(list_juncts)
+			traci.route.add(route_id, self.sim_env.map_data.find_best_route(start, end).edges)
 			traci.vehicle.add(veh_id, route_id, typeID='chevy_s10',departLane='random')
 			route = traci.route.getEdges(route_id)
 			self.sim_env.add_player(veh_id, route)

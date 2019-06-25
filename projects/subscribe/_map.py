@@ -48,7 +48,7 @@ class Map(object):
 		self.sumo_cfg = sumo_cfg
 		self.edges = {}
 		self.junctions = {}
-		self.populate_edges_junctions()
+		self.complex_row_col = self.populate_edges_junctions()
 		
 	@staticmethod
 	def mps_to_Mph(mps):
@@ -72,9 +72,11 @@ class Map(object):
 		junction_list = [x for x in doc.getElementsByTagName('junction') if not ':' in x.attributes['id'].value]
 
 		for item in junction_list:
-			self.junctions[item.attributes['id'].value] = Junctions((float(item.attributes['x'].value), float(item.attributes['y'].value)), item.attributes['id'].value)
-			print(item.attributes['id'.value])
-			row_col_dict[]
+			junct_id = item.attributes['id'].value
+			self.junctions[junct_id] = Junctions((float(item.attributes['x'].value), float(item.attributes['y'].value)), item.attributes['id'].value)
+
+			#print(junct_id)
+			row_col_dict[junct_id] = junct_id[4:]
 
 		for item in edge_list:
 			self.edges[item.attributes['id'].value] = Edge(item.attributes['from'].value, item.attributes['to'].value, float(item.childNodes[1].attributes['speed'].value), self.calculate_distance(item.attributes['from'].value, item.attributes['to'].value))
@@ -82,7 +84,7 @@ class Map(object):
 			self.junctions[item.attributes['to'].value].adjacent_edges_from.append(item.attributes['id'].value)
 			self.junctions[item.attributes['from'].value].adjacent_junctions.append(item.attributes['to'].value)
 
-
+		return row_col_dict
 
 	def row_col(self, row, column):
 		row_col_dict = {}
@@ -95,8 +97,6 @@ class Map(object):
 				index+=1
 
 		return row_col_dict
-
-
 
 
 	def calculate_distance(self, junc_from, junc_to):
@@ -130,14 +130,20 @@ class Map(object):
 		if weights:
 			return weight_dict, best_route
 
-
-
 		return best_route
 
-	def find_adjacent_cells(self, sumo_junction):
+	def find_adjacent_cells(self, sumo_junction, param='to'):
 		adjacent_list = []
-		for edge in self.junctions[sumo_junction].adjacent_edges_to:
-			adjacent_list.append(self.edges[edge]._to)
+
+		if param == 'to' or param == 'both':
+			for edge in self.junctions[sumo_junction].adjacent_edges_to:
+				adjacent_list.append(self.edges[edge]._to)
+
+		if param == 'from' or param == 'both':
+			for edge in self.junctions[sumo_junction].adjacent_edges_from:
+				adjacent_list.append(self.edges[edge]._from)
+
+
 		return adjacent_list
 
 
