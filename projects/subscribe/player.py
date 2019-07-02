@@ -10,7 +10,6 @@ class Player(object):
 		self.capacity = 100
 		self.prev_junction = passed_junction
 		self.reward = 0
-		self.cost = 5
 		
 	def modify(self, routes):
 		#this for when updating players
@@ -29,7 +28,6 @@ class GridPlayer(object):
 		self.capacity = 100
 		self.expected_reward = 0
 		self.reward=0
-		self.cost = 5
 
 	def get_next(self):
 		#print(self.node_path, self.node_index)

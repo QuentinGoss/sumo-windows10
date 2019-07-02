@@ -15,8 +15,8 @@ import pickle
 import os
 import datetime
 
-row = 121	
-column = 82
+row = Settings.row
+column = Settings.column
 
 mode='default' #default, reward
 
@@ -66,9 +66,19 @@ class GridWin(tk.Tk):
 			self.mainloop()
 		else:
 
-			Settings.parse_settings('./test.txt')
+
+			#Settings.change({'test':'test'},{'test':'test'})
+			for center in Settings.reward_distribution_center:
+				self.generate_reward_spread(center[0], center[1], Settings.reward_value_std, Settings.reward_position_std, Settings.reward_amount, mean=Settings.reward_value_mean)
+
+
+			if Settings.player_list and Settings.reward_list:
+				self.player_list = Settings.player_list
+				self.reward_list = Settings.reward_list
+
 			self.simulation()
 			self.on_closing()
+
 
 
 	def default_mode(self):
@@ -208,6 +218,45 @@ class GridWin(tk.Tk):
 
 		root.destroy()
 
+	def generate_reward_spread(self, x, y, value_std, position_std, amount, mean=None):
+		global row, column
+		#if mean is not none generate distribution based off mean to add to rewards
+		x_dist = self.get_truncated_normal(x, position_std, 0, row).rvs(amount+10000).round().astype(int)
+		y_dist = self.get_truncated_normal(y, position_std, 0, column).rvs(amount+10000).round().astype(int)
+		
+
+		xPo = np.random.choice(x_dist, amount)
+		yPo = np.random.choice(y_dist, amount)
+		
+		zip_po = list(zip(xPo, yPo))
+		i = 0
+		while i < len(zip_po):
+			x_points, y_points = zip_po[i]
+			string_key = str(x_points) + '_' + str(y_points)
+			if not string_key in self.rowcol_to_junction:
+				#print(string_key, 'not in')
+				zip_po[i] = (np.random.choice(x_dist, 1)[0], np.random.choice(y_dist, 1)[0])
+				continue
+			if mean:
+				mean_dist = self.get_truncated_normal(mean, value_std, 0, 10*value_std*mean).rvs(amount+10000).astype(float)
+				self.add_reward(x_points, y_points, np.random.choice(mean_dist, 1)[0])
+			else:
+				self.add_reward(x_points, y_points, 1)
+			i+=1
+
+		'''
+		for x_points, y_points in zip(xPo, yPo):
+			if mean:
+				mean_dist = self.get_truncated_normal(mean, std, 0, 10*std*mean).rvs(amount+10000).astype(float)
+				self.add_reward(x_points, y_points, np.random.choice(mean_dist, 1)[0])
+			else:
+				self.add_reward(x_points, y_points, 1)
+
+		'''
+
+
+
+
 
 	def get_truncated_normal(self, mean=0, sd=1, low=0, upp=10):
 		return truncnorm((low - mean) / sd, (upp - mean) / sd, loc=mean, scale=sd)
@@ -343,7 +392,7 @@ class GridWin(tk.Tk):
 			else:
 				player_instance = GridPlayer(self.rowcol_to_junction[string_key], self.rowcol_to_junction[destination])
 				player_instance.path = self.env_map.find_best_route(player_instance.start, player_instance.destination)
-				if not (player_instance.path.edges and player_instance.path):
+				if not (player_instance.path and player_instance.path.edges):
 					return False
 				player_instance.node_path = [self.env_map.edges[x]._to for x in player_instance.path.edges]
 
@@ -415,7 +464,7 @@ class GridWin(tk.Tk):
 
 			if adjacent_players <=1:
 				expected_utility = cell_utility
-				expected_sensing_plan = player_instance.cost
+				expected_sensing_plan = self.env_map.junctions[self.rowcol_to_junction[cell]].cost
 			else:
 				#sum the denomenator of the combination, store ncr in list to reuse later
 				ncr_list = [self.ncr(adjacent_players-1, player_number) for player_number in range(0, adjacent_players)] #consists of a list from 0
@@ -425,7 +474,7 @@ class GridWin(tk.Tk):
 					numerator = ncr_list[current_player-1] #retrieve ncr value from list
 					prM = numerator/denom
 					expected_utility += (prM*(cell_utility/pow(current_player, 2)))
-					expected_sensing_plan += (prM*(self.compute_sensing_plan(current_player, self.reward_list[cell], player_instance.cost)))
+					expected_sensing_plan += (prM*(self.compute_sensing_plan(current_player, self.reward_list[cell], self.env_map.junctions[self.rowcol_to_junction[cell]].cost)))
 			if (expected_utility > max_utility) and (expected_sensing_plan <= player_instance.capacity):
 
 				max_utility = expected_utility
@@ -483,10 +532,12 @@ class GridWin(tk.Tk):
 			if suc:
 				cov = self.cap.calculate_coverage()
 				print('coverage is ', cov)
-				multi_data.simulation_list.append(cov)
+				multi_data.simulation_conv_list.append(cov)
+				multi_data.simulation_list.append(self.cap)
 				i+=1
-				if i%100 ==0:
-					multi_data.plot(os.path.join(Settings.plot_path,f'step{i}_rewards.png'))
+				if i%10 ==0:
+					multi_data.pickle_save(os.path.join(Settings.sim_save_path, f'{i}_step_base.sim'))
+					#multi_data.plot(os.path.join(Settings.plot_path,f'step{i}_rewards.png'))
 			else:
 				break
 			
@@ -503,7 +554,7 @@ class GridWin(tk.Tk):
 		if self.gui:
 			self.default_mode()
 
-		if not replay: self.cap = DataCapture(self.row, self.column) #reset if its not replay
+		if not replay: self.cap = DataCapture(len(self.env_map.junctions)) #reset if its not replay
 
 		#if no predefined players, randomly spawn players
 		if not self.player_list:
@@ -547,7 +598,7 @@ class GridWin(tk.Tk):
 					button_row, button_column = button_name.split('_')
 
 					if next_node == player.destination:
-						print('player has arrived from ', self.rowcol_to_junction[player.start], self.rowcol_to_junction[player.destination])
+						print(f'player has arrived to {self.rowcol_to_junction[player.destination]} from {self.rowcol_to_junction[player.start]}')
 						arrived_locations.append(player.destination)
 						self.cap.player_list.append(player) #add player to the post processing list
 
@@ -586,20 +637,26 @@ class GridWin(tk.Tk):
 				for i, player in enumerate(players):
 					try:
 						self.player_list[location][i].reward += (self.reward_list[location]/len(self.player_list[location]))
-						player_sensing_plan = self.compute_sensing_plan(len(self.player_list[location]), self.reward_list[location], player.cost)
+						location_cost = self.env_map.junctions[self.rowcol_to_junction[location]].cost
+						player_sensing_plan = self.compute_sensing_plan(len(self.player_list[location]), self.reward_list[location], location_cost)
 						
 						#whats the default expected sensing plan when there is only 1 player?? 
 						if self.reward_list[location] != 0:
 							# if you arrived and your cost is more than your player capacity might as well take what ever your capactiy can handle
 							if player_sensing_plan <= player.capacity:
-								if player_sensing_plan == 0 and player.cost > player.capacity:
+								if player_sensing_plan == 0 and location_cost > player.capacity:
 									player_sensing_plan = player.capacity
-								elif player_sensing_plan == 0 and player.cost <= player.capacity:
-									player_sensing_plan = player.cost
+								elif player_sensing_plan == 0 and location_cost <= player.capacity:
+									player_sensing_plan = location_cost
+
+								self.player_list[location][i].capacity -= player_sensing_plan
+							else:
+								self.player_list[location][i].capacity = 0
+
 				
 
 							print(f'player sensing plan value is {player_sensing_plan}, capacity is {player.capacity}')
-							self.player_list[location][i].capacity -= player_sensing_plan
+							
 
 						
 

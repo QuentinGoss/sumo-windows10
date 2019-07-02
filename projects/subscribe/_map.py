@@ -3,7 +3,7 @@
 
 #this map class is handled by the server
 #to update user map the server handle requests
-
+from util import *
 from xml.dom import minidom
 from settings import Settings
 import traci
@@ -19,6 +19,14 @@ class Edge(object):
 		self._to = _to
 		self.speed = speed
 		self.distance = distance
+		self.std = 1
+		self.distribution = self.generate_speed_distribution()
+
+	def generate_speed_distribution(self, amount=10000, file=None):
+		if not file:
+			#if no pparse generate with mean as speed limit, std=1 and max speed is 200
+			return get_truncated_normal(self.speed,upp=200).rvs(amount)
+
 		
 
 class Junctions(object):
@@ -33,6 +41,7 @@ class Junctions(object):
 		self.y = self.coord[1]
 		self.number_players = 0
 		self.adjacent_junctions = [] # adjacent junctions can be traveled to
+		self.cost = 5
 
 	def __repr__(self):
 		return repr((self.junction_id, self.x,self.y))
