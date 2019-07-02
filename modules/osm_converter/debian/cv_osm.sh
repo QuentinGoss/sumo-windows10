@@ -19,6 +19,9 @@ geo_sumocfg=$project"_geo.sumocfg"
 rm $prj_dir$net_xml *.sumocfg
 echo "Old .net.xml file(s) removed. Creating a new one..."
 
+# Create the prjdir if it doens't exist already
+mkdir $prjdir
+
 # Set SUMO_HOME var
 export SUMO_HOME="/home/veins/src/sumo-0.30.0"
 
