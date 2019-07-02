@@ -3,8 +3,8 @@ import json
 
 class Settings(object):
 	default = os.path.abspath('./../')
-	sumo_config = os.path.join(default, "grid4/data/grid4.sumocfg")
-	#sumo_config = os.path.join(default, "Haines_City/data/100/Haines_City.100.sumocfg")
+	#sumo_config = os.path.join(default, "grid4/data/grid4.sumocfg")
+	sumo_config = os.path.join(default, "Haines_City/data/100/Haines_City.100.sumocfg")
 
 	sim_config_load_path = None
 
