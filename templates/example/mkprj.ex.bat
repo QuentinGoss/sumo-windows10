@@ -1,2 +1,2 @@
-python ../mkprj.py -d ./ -n london-seg3.100 -m dbtest
+python ../mkprj.py -d ./ -n london-seg4 -m test
 pause 
