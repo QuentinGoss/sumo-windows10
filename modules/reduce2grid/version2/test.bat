@@ -1,8 +1,11 @@
-python reduce2grid.py --nod.xml=C:\flpoly\thesis\DemandSupplyModel\London\sumo\osm_converter\london-seg3\london-seg3.nod.xml --edg.xml=C:\flpoly\thesis\DemandSupplyModel\London\sumo\osm_converter\london-seg3\london-seg3.edg.xml --center.xy=7177.565,11292.2 --window.height=7500 --window.width=7500 --cell.dimension=100 --name=london-seg3 --output.dir=100 --speed=150 --mph
+python reduce2grid.py --nod.xml=C:\sumo-windows10\projects\london-seg4\data\london-seg4.nod.xml --edg.xml=C:\sumo-windows10\projects\london-seg4\data\london-seg4.edg.xml --center.xy=4360.64,3106.71 --window.height=5200 --window.width=5200 --cell.dimension=100 --name=london-seg4.100 --output.dir=100 --speed=150 --mph
 pause
 exit
-11415.59,15005.60 TR
-2939.54,7578.80 BL
 
-8476.05,7426.8 x,y
-7177.565,11292.2 center
+x,y
+497.96,5906.27 TL
+7833.50,608.38 BR
+4360.64,3106.71 center
+
+7335.54 Length R - L
+5297.89 Height T - B
