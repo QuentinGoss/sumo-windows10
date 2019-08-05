@@ -15,6 +15,8 @@ class Settings(object):
 	sim_save = os.path.join(default, "subscribe/simulations/recent.sim")
 	plot_path = os.path.join(default, "subscribe/simulations/plots")
 
+	algorithms = ['base', 'greedy', 'random', 'gta']
+
 	def __init__(self):
 
 		#test params for getting result from simulation

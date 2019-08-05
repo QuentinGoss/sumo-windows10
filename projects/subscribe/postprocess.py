@@ -15,8 +15,8 @@ class DataCapture(object): #object per simulation
 	def __init__(self, map_junctions, rowcol_to_junction):
 		self.player_list = [] #player node hit is inters of row column grid
 		self.map_junctions = map_junctions
-		self.reward_list = [] #interms of sumo junctions as key
-		self.rowcol_to_junction = rowcol_to_junction
+		self.reward_list = [] #interms of sumo junctions as key the rewards for that simulation
+		self.rowcol_to_junction = rowcol_to_junction #conversion from grid to junctions
 		self.reward_junction_ratio = None #ratio of total number of reward cells over total junctions
 		self.setting=None
 		
@@ -66,7 +66,7 @@ class MultiCapture(object): #object for multiple simulations
 			pickle.dump(self, config_dictionary_file)
 		print('simulation saved success...')
 
-	def pickle_load(self, save_path, directory=False):
+	def pickle_load(self, save_path, directory=False, json_format=False):
 
 		if directory:
 			save_path = self.find_recent_sim(save_path)
@@ -74,7 +74,16 @@ class MultiCapture(object): #object for multiple simulations
 		print('Loading from existing file... ', save_path)
 
 		with open(save_path, 'rb') as config_dictionary_file:
-			return pickle.load(config_dictionary_file)
+			value = pickle.load(config_dictionary_file)
+			if json_format:
+				player_trace = {}
+				for i, player in enumerate(value.simulation_list[0].player_list):
+					player_trace[i] = player.node_hit
+				with open('trace.json', 'w') as json_write:
+					json.dump(player_trace, json_write)
+
+
+			return value
 			
 
 		
@@ -131,8 +140,8 @@ def plot_graph_multiple(folder, x_label, y_label, catogories): # x-axis number o
 
 
 if __name__== "__main__":
-	obj = MultiCapture('test').pickle_load(Settings.plot_path, directory=True)
-	print(obj.average())
+	obj = MultiCapture('test').pickle_load(Settings.plot_path, directory=True, json_format=True)
+	#print(obj.average())
 
 	#plot_graph_folder(os.path.join(Settings.sim_save_path, 'change capacity 40'), [x for x in range(10, 210, 40)], x_label='Capacity Mean Value', y_label='Coverage (%)')
 	#plot_graph_multiple(os.path.join(Settings.sim_save_path, 'change capacity'), 'capacity','coverage', [x for x in range(10,60,10)])
