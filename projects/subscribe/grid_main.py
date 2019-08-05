@@ -15,31 +15,45 @@ import pickle
 import os
 import datetime
 
-row = Settings.row
-column = Settings.column
 
-mode='default' #default, reward
+
 
 
 
 class GridWin(tk.Tk):
-	def __init__(self, row, column, gui=True):
+	def __init__(self, gui=True, testing='budget'):
 		super(GridWin, self).__init__()
 		traci.start(["sumo", "-c", Settings.sumo_config])
 
-		self.row = row
-		self.column = column
+		self.mode='default' #default, reward
+
+		self.testing = testing #if testing budget keep capacity constant, if testing capacity keep budget constant
 
 		self.env_map = Map(Settings.sumo_config)
+		
+		self.rowcol_to_junction = self.env_map.complex_row_col
+
+		self.row = int(self.env_map.rows)
+		self.column = int(self.env_map.columns)
 
 		#self.rowcol_to_junction = self.env_map.row_col(self.row, self.column) #value is the junction id and key is row_col
-		self.rowcol_to_junction = self.env_map.complex_row_col
+
 		self.rowcol_to_junction.update(dict((v, k) for k, v in self.rowcol_to_junction.items()))
 		self.player_list = {} #stores location as key, player object as value
 		self.reward_list = {} #stores location as key, reward value as value
+		self.random_uniform_reward_list = {} #akbas
 
 
 		self.gui = gui
+
+
+
+		self.setting = Settings()
+
+		#settings
+		self.reward_distribution_center = [(0,0),(0,self.column),(self.row, 0),(self.row, self.column)]
+
+
 
 		if gui:
 			self.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -64,20 +78,17 @@ class GridWin(tk.Tk):
 			self.spawn_grid()
 			self.control_buttons()
 			self.mainloop()
-		else:
+	
+			
+	def run_sim_no_gui(self, replay=False):
+		if (not replay) or self.testing == 'budget':
+			for center in self.reward_distribution_center:
+				self.generate_reward_spread(center[0], center[1], self.setting.reward_value_random[1], self.setting.reward_position_std, self.setting.reward_amount, mean=self.setting.reward_value_random[0])
 
-
-			#Settings.change({'test':'test'},{'test':'test'})
-			for center in Settings.reward_distribution_center:
-				self.generate_reward_spread(center[0], center[1], Settings.reward_value_std, Settings.reward_position_std, Settings.reward_amount, mean=Settings.reward_value_mean)
-
-
-			if Settings.player_list and Settings.reward_list:
-				self.player_list = Settings.player_list
-				self.reward_list = Settings.reward_list
-
-			self.simulation()
-			self.on_closing()
+		self.simulation(replay=replay)
+		if self.testing == 'budget':
+			#reset reward list if testing budget
+			self.reward_list = {}
 
 
 
@@ -85,8 +96,8 @@ class GridWin(tk.Tk):
 		#each grid click spawns 1 vehicle, cells black
 		#right click undo
 
-		for i in range(row):
-			for j in range(column):
+		for i in range(self.row):
+			for j in range(self.column):
 				string_key = str(i) + '_' + str(j)
 
 				self.grid_list[i][j].unbind('<Enter>')
@@ -118,14 +129,13 @@ class GridWin(tk.Tk):
 
 	
 	def spawn_reward_mode(self):
-		global mode
-		if mode == 'default':
-			mode='reward'
+		if self.mode == 'default':
+			self.mode='reward'
 			self.select_rewards.configure(text='Select Vehicles')
 
 
-			for i in range(row):
-				for j in range(column):
+			for i in range(self.row):
+				for j in range(self.column):
 					string_key = str(i) + '_' + str(j)
 					self.grid_list[i][j].configure(command=lambda i=i, j=j: self.add_reward(i,j, 1))
 					self.grid_list[i][j].configure(bg=self.default_button_color)
@@ -143,7 +153,7 @@ class GridWin(tk.Tk):
 
 		else:
 			self.default_mode()
-			mode='default'
+			self.mode='default'
 			self.select_rewards.configure(text='Select Rewards')
 
 
@@ -219,16 +229,18 @@ class GridWin(tk.Tk):
 		root.destroy()
 
 	def generate_reward_spread(self, x, y, value_std, position_std, amount, mean=None):
-		global row, column
 		#if mean is not none generate distribution based off mean to add to rewards
-		x_dist = self.get_truncated_normal(x, position_std, 0, row).rvs(amount+10000).round().astype(int)
-		y_dist = self.get_truncated_normal(y, position_std, 0, column).rvs(amount+10000).round().astype(int)
+		x, y = self.find_closest_road(x, y)
+
+		x_dist = self.get_truncated_normal(x, position_std, 0, self.row).rvs(amount+10000).round().astype(int)
+		y_dist = self.get_truncated_normal(y, position_std, 0, self.column).rvs(amount+10000).round().astype(int)
 		
 
 		xPo = np.random.choice(x_dist, amount)
 		yPo = np.random.choice(y_dist, amount)
 		
 		zip_po = list(zip(xPo, yPo))
+
 		i = 0
 		while i < len(zip_po):
 			x_points, y_points = zip_po[i]
@@ -244,17 +256,21 @@ class GridWin(tk.Tk):
 				self.add_reward(x_points, y_points, 1)
 			i+=1
 
-		'''
-		for x_points, y_points in zip(xPo, yPo):
-			if mean:
-				mean_dist = self.get_truncated_normal(mean, std, 0, 10*std*mean).rvs(amount+10000).astype(float)
-				self.add_reward(x_points, y_points, np.random.choice(mean_dist, 1)[0])
+		#assert len(self.reward_list) == amount, f'len of rewrd amount does not match {len(self.reward_list)}'
+	
+	def find_closest_road(self, x, y):
+		closest = None
+		for key, value in self.env_map.junctions.items():
+			key = self.rowcol_to_junction[key]
+			x1, y1 = int(key.split('_')[0]), int(key.split('_')[1])
+			dist = np.linalg.norm(np.array([x,y])-np.array([x1, y1]))
+			if not closest:
+				closest = (key, dist)
 			else:
-				self.add_reward(x_points, y_points, 1)
+				if dist < closest[1]:
+					closest = (key, dist)
 
-		'''
-
-
+		return int(closest[0].split('_')[0]), int(closest[0].split('_')[1])
 
 
 
@@ -295,6 +311,7 @@ class GridWin(tk.Tk):
 
 
 	def replay_simulation(self, load=False):
+		print('player numbers total(10):',len(self.cap.player_list))
 		for value in self.cap.player_list:
 			new_player = GridPlayer(value.start, value.destination)
 			row, column = self.rowcol_to_junction[value.start].split('_')
@@ -306,7 +323,7 @@ class GridWin(tk.Tk):
 
 		self.cap.player_list=[]
 
-		self.start_sim(replay=True, load=load)
+		return self.start_sim(replay=True, load=load)
 
 
 	def save_simulation(self):
@@ -318,9 +335,9 @@ class GridWin(tk.Tk):
 		print('simulation saved success...')
 
 	def spawn_grid(self):
-		for i in range(row):
+		for i in range(self.row):
 			temp_list = []
-			for j in range(column):
+			for j in range(self.column):
 				b= tk.Button(self.grid_frame)
 				b.grid(row=i, column=j, sticky=tk.N+tk.S+tk.W+tk.E, columnspan=1)
 				self.default_button_color = b.cget('bg')
@@ -379,7 +396,7 @@ class GridWin(tk.Tk):
 		string_key = str(row) + '_' + str(column)
 
 
-		destination = Settings.destination
+		destination = self.setting.destination
 		if destination =='random':
 			destination = str(randrange(self.row))+'_'+str(randrange(self.column))
 
@@ -396,13 +413,12 @@ class GridWin(tk.Tk):
 					return False
 				player_instance.node_path = [self.env_map.edges[x]._to for x in player_instance.path.edges]
 
-			player_instance.capacity = self.get_truncated_normal(Settings.player_reward_random[0], Settings.player_reward_random[1], 0, Settings.player_reward_random[0]*2).rvs(1)[0]
+			player_instance.capacity = self.get_truncated_normal(self.setting.player_capacity_random[0], self.setting.player_capacity_random[1], 0, self.setting.player_capacity_random[0]*2).rvs(1)[0]
 			#print('plyer capacity is: ', player_instance.capacity)
 		except KeyError as e:
-			#print(f'i failed at {e}')
 			return False
 
-		print(f'vehicle start at {string_key} end at {destination}')
+		print(f'vehicle start at {string_key} end at {destination} capacity value is {player_instance.capacity}, reward list len is {len(self.reward_list)}')
 
 
 		if string_key in self.player_list:
@@ -438,6 +454,8 @@ class GridWin(tk.Tk):
 	def GTA_next_node(self, location, player_instance, current_node, next_node):
 		#takes in location, player, and next node return new next node and player instance
 		cells = self.find_adjacent_cells(location)
+		if not cells:
+			print('vehicle reached dead end')
 
 		new_route = player_instance.path
 
@@ -496,8 +514,8 @@ class GridWin(tk.Tk):
 			
 			weight_dict, best_route = self.env_map.find_best_route(current_node, player_instance.destination, weights=True)
 			try:
-				total_sum = reduce(lambda x,y:x+y,[exp(Settings.theta_random/x.travelTime) for x in weight_dict.values()])
-				prob_distribute = [exp(Settings.theta_random/x.travelTime)/total_sum for x in weight_dict.values()]
+				total_sum = reduce(lambda x,y:x+y,[exp(self.setting.theta_random/x.travelTime) for x in weight_dict.values()])
+				prob_distribute = [exp(self.setting.theta_random/x.travelTime)/total_sum for x in weight_dict.values()]
 
 				#print('prob_distribute ', prob_distribute)
 				#print('max value is {}, index value is {}, the next cell is {}, current cell is {}'.format(max(prob_distribute), prob_distribute.index(max(prob_distribute)), self.rowcol_to_junction[list(weight_dict.keys())[prob_distribute.index(max(prob_distribute))]], self.rowcol_to_junction[current_node]))
@@ -523,43 +541,105 @@ class GridWin(tk.Tk):
 		return next_node, player_instance
 
 
-	def simulation(self):
+	def simulation(self, replay=False):
 		multi_data = MultiCapture('Traffic Simulation')
 		i=0
-		while i < Settings.simulation_steps:
+		while i < self.setting.simulation_steps:
 			print('iteration ', i)
-			suc = self.start_sim()
-			if suc:
-				cov = self.cap.calculate_coverage()
-				print('coverage is ', cov)
-				multi_data.simulation_conv_list.append(cov)
-				multi_data.simulation_list.append(self.cap)
-				i+=1
-				if i%10 ==0:
-					multi_data.pickle_save(os.path.join(Settings.sim_save_path, f'{i}_step_base.sim'))
-					#multi_data.plot(os.path.join(Settings.plot_path,f'step{i}_rewards.png'))
+			if replay:
+				suc = self.replay_simulation()
 			else:
-				break
+				suc = self.start_sim() #first time running simulation generate random players save it to self.cap
+				replay=True
+
+
+
+			if suc: #if simulation is success
+				self.cap.setting = self.setting
+				self.cap.reward_list = self.reward_list
+				self.cap.reward_junction_ratio = len(self.reward_list)/len(self.env_map.junctions)
+				cov = self.cap.calculate_coverage()
+				test_cov = self.cap.calculate_test_coverage()
+				print('road utilization is ', cov)
+				print('coverage is ', test_cov)
+				multi_data.simulation_conv_list.append(cov)
+				multi_data.simulation_test_coverage.append(test_cov)
+				multi_data.simulation_list.append(self.cap)
+				
+				#if i%10 ==0:
+				if i == (self.setting.simulation_steps-1):
+					if self.setting.game_theory_algorithm!='gta':
+						multi_data.pickle_save(os.path.join(Settings.sim_save_path, f'reward{self.setting.reward_value_random[0]}_Step{self.setting.simulation_steps}_{self.game_theory_algorithm}.sim'))
+					else:
+						multi_data.pickle_save(os.path.join(Settings.sim_save_path, f'reward{self.setting.reward_value_random[0]}_capacity{self.setting.player_capacity_random[0]}_Step{self.setting.simulation_steps}.sim'))
+				i+=1
+			
+			self.player_list = {}
+
+
+		temp_multi_data = MultiCapture('Traffic Simulation')
+
+		if self.testing =='budget':
+			temp = self.reward_list #save the temp reward list before replacing it with uniform reward.
+
+			j = 0
+			while j < self.setting.simulation_steps:
+				#this is for random uniform reward distribution
+				self.reward_spread_uniform((multi_data.simulation_list[0].reward_junction_ratio)*len(self.env_map.junctions))
+				suc = self.replay_simulation()
+				if suc:
+					cov = self.cap.calculate_coverage()
+					test_cov = self.cap.calculate_test_coverage()
+					print('RU for random reward ', cov)
+					print('COV for random reward ', test_cov)
+					temp_multi_data.simulation_conv_list.append(cov)
+					temp_multi_data.simulation_test_coverage.append(test_cov)
+					temp_multi_data.simulation_list.append(self.cap)
+				if j == (self.setting.simulation_steps-1):
+					if self.setting.game_theory_algorithm!='gta':
+						temp_multi_data.pickle_save(os.path.join(Settings.sim_save_path, f'reward{self.setting.reward_value_random[0]}_Step{self.setting.simulation_steps}_default_random_reward.sim'))
+					else:
+						temp_multi_data.pickle_save(os.path.join(Settings.sim_save_path, f'reward{self.setting.reward_value_random[0]}_capacity{self.setting.player_capacity_random[0]}_Step{self.setting.simulation_steps}_random_reward.sim'))
+				j+=1
 			
 
 
-		
+			self.reward_list = temp
 
+	
+	def reward_spread_uniform(self, amount_rewards):
+		#spread rewards uniformly based of ratio
+		self.reward_list = {}
+
+		if self.random_uniform_reward_list:
+			for key, value in self.random_uniform_reward_list.items():
+				self.random_uniform_reward_list[key] = randrange(self.setting.reward_value_random[0]-self.setting.reward_value_random[1], self.setting.reward_value_random[0]+self.setting.reward_value_random[1])
+
+			self.reward_list = self.random_uniform_reward_list
+		else:
+
+			reward_locations = np.random.choice(list(self.env_map.junctions.keys()), round(amount_rewards))
+			for value in reward_locations:
+				value = self.rowcol_to_junction[value]
+				x,y = int(value.split('_')[0]), int(value.split('_')[1])
+				self.add_reward(x,y,randrange(self.setting.reward_value_random[0]-self.setting.reward_value_random[1], self.setting.reward_value_random[0]+self.setting.reward_value_random[1]))
 
 
 
 	def start_sim(self, replay=False, load=False):
 
+		#print('len reward is ', len(self.reward_list))
+
 		#simulation start
 		if self.gui:
 			self.default_mode()
 
-		if not replay: self.cap = DataCapture(len(self.env_map.junctions)) #reset if its not replay
+		if not replay: self.cap = DataCapture(len(self.env_map.junctions), self.rowcol_to_junction) #reset if its not replay
 
 		#if no predefined players, randomly spawn players
 		if not self.player_list:
 			i = 0
-			while i < Settings.car_numbers:
+			while i < self.setting.car_numbers:
 				row, column = randrange(self.row), randrange(self.column)
 				suc = self.add_player(row, column)
 				if suc:
@@ -575,7 +655,7 @@ class GridWin(tk.Tk):
 
 			if self.gui:
 				self.update()
-				time.sleep(Settings.simulation_delay)
+				time.sleep(self.setting.simulation_delay)
 			temp_dict = {}
 			for location, players in self.player_list.items():
 				for i, player in enumerate(players):
@@ -586,7 +666,7 @@ class GridWin(tk.Tk):
 					#junction value in sumo
 
 					#insert logic for game theory, 
-					if Settings.game_theory_algorithm and not load:
+					if (self.game_theory_algorithm !='base') and not load: #if its loading from file then just play players
 						next_node, player = self.GTA_next_node(location, player, self.rowcol_to_junction[location], self.rowcol_to_junction[next_node])
 
 
@@ -598,7 +678,7 @@ class GridWin(tk.Tk):
 					button_row, button_column = button_name.split('_')
 
 					if next_node == player.destination:
-						print(f'player has arrived to {self.rowcol_to_junction[player.destination]} from {self.rowcol_to_junction[player.start]}')
+						print(f'player has arrived to {self.rowcol_to_junction[player.destination]} from {self.rowcol_to_junction[player.start]} nodes traveled:{len(player.node_hit)}')
 						arrived_locations.append(player.destination)
 						self.cap.player_list.append(player) #add player to the post processing list
 
@@ -633,6 +713,8 @@ class GridWin(tk.Tk):
 
 			print(f'{player_left} remaining')
 
+			#if capactiy too low make random jumps towards destination
+
 			for location, players in self.player_list.items():
 				for i, player in enumerate(players):
 					try:
@@ -642,7 +724,7 @@ class GridWin(tk.Tk):
 						
 						#whats the default expected sensing plan when there is only 1 player?? 
 						if self.reward_list[location] != 0:
-							# if you arrived and your cost is more than your player capacity might as well take what ever your capactiy can handle
+							# if you arrived and your cost is more than your player capacity might as well take what ever your capacity can handle
 							if player_sensing_plan <= player.capacity:
 								if player_sensing_plan == 0 and location_cost > player.capacity:
 									player_sensing_plan = player.capacity
@@ -650,12 +732,16 @@ class GridWin(tk.Tk):
 									player_sensing_plan = location_cost
 
 								self.player_list[location][i].capacity -= player_sensing_plan
+								self.player_list[location][i].collected_sp_list.append(location)
 							else:
-								self.player_list[location][i].capacity = 0
+								if self.player_list[location][i].capacity != 0:
+									self.player_list[location][i].capacity = 0
+									self.player_list[location][i].collected_sp_list.append(location)
+
 
 				
 
-							print(f'player sensing plan value is {player_sensing_plan}, capacity is {player.capacity}')
+							#print(f'player sensing plan value is {player_sensing_plan}, capacity is {player.capacity}')
 							
 
 						
@@ -663,25 +749,18 @@ class GridWin(tk.Tk):
 					except KeyError as e:
 						continue
 
-
-			
-
-			
+	
 		print('simulation completed')
 		self.reset_junction_players(arrived_locations)
-
-
 		return True
 
 
-
 	def clear(self):
-		global mode
-		if mode == 'default':
+		if self.mode == 'default':
 			self.player_list = {}
 			self.default_mode()
 		else:
-			mode='default'
+			self.mode='default'
 			self.reward_list = {}
 			self.spawn_reward_mode()
 
@@ -691,14 +770,38 @@ class GridWin(tk.Tk):
 			self.env_map.junctions[value].number_players = 0
 		
 
-
-
-
 	def on_closing(self):
 		self.destroy()
 		traci.close()
 
 
 if __name__ == "__main__":
-	root = GridWin(row, column, gui=False)
+
+	cap_value=None
 	
+
+	root = GridWin(gui=False, testing='budget') #testing budget keep caapcity same
+
+	for i in range(5):
+		#print('im here ', i)
+		if not cap_value:
+			#print('root value 1', root.player_capacity_random)
+			root.run_sim_no_gui() #this one needs fix
+			cap_value = root.cap
+		else:
+			#print('root value not 1', root.player_capacity_random)
+			root.cap = cap_value  #use previous cap value
+			root.run_sim_no_gui(replay=True)
+			#reaply simulation needs to run multiple simulations
+		#root.setting.player_capacity_random = (root.setting.player_capacity_random[0] + 40, 5)
+		root.setting.reward_value_random = (root.setting.reward_value_random[0] + 40, 5) 
+
+	
+
+
+
+	root.setting.game_theory_algorithm = 'base'
+	root.run_sim_no_gui(replay=True)
+
+
+	root.on_closing()

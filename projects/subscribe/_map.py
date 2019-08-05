@@ -12,20 +12,49 @@ from concurrent.futures import ProcessPoolExecutor as pool
 from multiprocessing import cpu_count
 import os
 import math
+import numpy as np
+
+
+class Poi(object):
+	def __init__(self, junction):
+		self.junction = junction
+
+
 
 class Edge(object):
 	def __init__(self, _from, _to, speed, distance):
 		self._from = _from
 		self._to = _to
-		self.speed = speed
-		self.distance = distance
-		self.std = 1
+		self.speed = mps_to_Mph(speed)
+		self.distance = meter_to_miles(distance)
+		self.std = 5
 		self.distribution = self.generate_speed_distribution()
+		self.bucket = self.generate_speed_bucket(self.distribution)
+		self.distribution_time = self.distance/self.distribution
+
+	def generate_speed_bucket(self, dist, bins_num=6):
+		#print(f'speed is {self.speed} distance is {self.distance}, std is {self.std}')
+		result =  np.histogram(dist, bins=np.linspace(np.min(dist), np.max(dist), num=bins_num))
+		#print(result)
+		result = (result[0]/np.sum(result[0]), self.distance/result[1])
+		#result returns tuple of 2, first contains the prob value, second contains the intervals
+		#print(result)
+		#exit()
+		return result
+
 
 	def generate_speed_distribution(self, amount=10000, file=None):
 		if not file:
 			#if no pparse generate with mean as speed limit, std=1 and max speed is 200
-			return get_truncated_normal(self.speed,upp=200).rvs(amount)
+			dist = get_truncated_normal(mean=self.speed,sd=self.std, upp=200).rvs(amount)
+		else:
+			dist = None # none for now when avliable load from another place
+
+		return dist
+		
+
+
+
 
 		
 
@@ -58,6 +87,8 @@ class Map(object):
 		self.edges = {}
 		self.junctions = {}
 		self.complex_row_col = self.populate_edges_junctions()
+
+
 		
 	@staticmethod
 	def mps_to_Mph(mps):
@@ -70,7 +101,11 @@ class Map(object):
 	def populate_edges_junctions(self):
 		row_col_dict = {}
 		sumo_xml = minidom.parse(self.sumo_cfg)
-
+		try:
+			self.rows = sumo_xml.getElementsByTagName('grid-dimension')[0].attributes['rows'].value
+			self.columns = sumo_xml.getElementsByTagName('grid-dimension')[0].attributes['cols'].value
+		except Exception as e:
+			print('parsing row and column failure ', e)
 		map_path = sumo_xml.getElementsByTagName('net-file')[0].attributes['value'].value
 		map_path = os.path.join(os.path.dirname(self.sumo_cfg), map_path)
 
