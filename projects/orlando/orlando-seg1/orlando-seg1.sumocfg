@@ -1,0 +1,10 @@
+<configuration>
+	<input>
+		<net-file value="orlando-seg1.net.xml" />
+		<route-files value="orlando-seg1.rou.xml" />
+	</input>
+	<time>
+		<begin value="0" />
+		<end value="-1" />
+	</time>
+</configuration>

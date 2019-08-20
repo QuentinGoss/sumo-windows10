@@ -1,0 +1,13 @@
+<configuration>
+	<input>
+		<net-file value="orlando-seg1.1000.net.xml" />
+		<route-files value="orlando-seg1.1000.rou.xml" />
+	</input>
+	<time>
+		<begin value="0" />
+		<end value="3000000" />
+	</time>
+	<settings>
+		<grid-dimension rows="5" cols="5" />
+	</settings>
+</configuration>
