@@ -19,32 +19,33 @@ class DataCapture(object): #object per simulation
 		self.rowcol_to_junction = rowcol_to_junction #conversion from grid to junctions
 		self.reward_junction_ratio = None #ratio of total number of reward cells over total junctions
 		self.setting=None
+
+
+	def get_all_cells_visited(self, repeat=False):
+		player_coverage_list = []
+		for player in self.player_list:
+			player_coverage_list.append(player.start)
+			for node in player.node_hit:
+				player_coverage_list.append(node)
+		if repeat:
+			return player_coverage_list
+		return set(player_coverage_list)
 		
 
 	#{node:{hit:#, players:[]}}
 	def calculate_coverage(self): #road utilization amount of cells visited over all cells
-		player_coverage_dict = {}
-		for player in self.player_list:
-			player_coverage_dict[player.start] = {'hit':1, 'player_list':[player]}
-			for node in player.node_hit:
-				if node in player_coverage_dict:
-					player_coverage_dict[node]['hit'] +=1
-					if not player in player_coverage_dict[node]['player_list']:
-						player_coverage_dict[node]['player_list'].append(player)
-				else:
-					player_coverage_dict[node] = {'hit':1, 'player_list':[player]}
-		print(f'road utilization cells hit:{len(player_coverage_dict)}, total sumo cells:{self.map_junctions}')
-		return (len(player_coverage_dict)/self.map_junctions)*100
+		return (len(self.get_all_cells_visited())/self.map_junctions)*100
 
 	def calculate_test_coverage(self): #actually coverage amount rewarded cells visited over total reward cells
 		reward_cell_visited = []
 		reward_hit_number = 0
-		#print(self.reward_list)
-		#print(f'len player are {len(self.player_list)}, reward list len is {len(self.reward_list)}')
+
+		#collected_sp_list need to contain node interms of grid
+
 		for player in self.player_list:
 			#print(f'player len node are {player.node_hit}')
 			for node in player.collected_sp_list:
-				if (self.rowcol_to_junction[node] in self.reward_list) and (node not in reward_cell_visited):
+				if (node in self.reward_list) and (node not in reward_cell_visited):
 					reward_hit_number +=1
 					reward_cell_visited.append(node)
 		print(f'coverage cells hit:{reward_hit_number}, total rewards cells:{len(self.reward_list)}')
@@ -71,7 +72,7 @@ class MultiCapture(object): #object for multiple simulations
 		if directory:
 			save_path = self.find_recent_sim(save_path)
 
-		print('Loading from existing file... ', save_path)
+		#print('Loading from existing file... ', save_path)
 
 		with open(save_path, 'rb') as config_dictionary_file:
 			value = pickle.load(config_dictionary_file)
@@ -79,7 +80,11 @@ class MultiCapture(object): #object for multiple simulations
 				player_trace = {}
 				for i, player in enumerate(value.simulation_list[0].player_list):
 					player_trace[i] = player.node_hit
-				with open('trace.json', 'w') as json_write:
+				path_name = os.path.dirname(save_path)
+				json_file = os.path.basename(save_path).split('.')[0]+'.json'
+				json_file = os.path.join(path_name, json_file)
+				print(f'json path is {json_file}')
+				with open(json_file, 'w') as json_write:
 					json.dump(player_trace, json_write)
 
 
@@ -88,12 +93,18 @@ class MultiCapture(object): #object for multiple simulations
 
 		
 
-	def average(self):
+	def average(self): #average for road util
 		total = 0
 		for value in self.simulation_conv_list:
 			total+=value
-
 		return total/len(self.simulation_conv_list)
+
+	def average_coverage(self):
+		total = 0
+		for value in self.simulation_test_coverage:
+			total += value
+		return total/len(self.simulation_test_coverage)
+
 
 	def find_recent_sim(self, folder):
 		file_list = glob.glob(os.path.join(folder, r'*.sim'))
@@ -136,13 +147,56 @@ def plot_graph_multiple(folder, x_label, y_label, catogories): # x-axis number o
 	plt.show()
 
 
+def plot_comparision(folder, comp='algo'): #take multiple files and compare their ru and rc. #comp can be algo or capacity 
+	#comparing base, greedy, random and gta 
+	folder, _, files = next(os.walk(folder))
+	if len(folder) > 1:
+		#when multiple files for each algo
+		pass
+	files = [os.path.join(folder, file) for file in files]
+	files.sort(key=os.path.getctime)     
+
+	print([file.split('_')[-3] for file in files])
+
+	ru_mean = [MultiCapture('test').pickle_load(file, directory=False).average() for file in files]
+	print()
+	rc_mean = [MultiCapture('test').pickle_load(file, directory=False).average_coverage() for file in files]
 
 
+
+	n_groups = 4
+	index = np.arange(n_groups)
+	bar_width = 0.25
+	opacity = 0.8
+
+
+
+
+	rects1 = plt.bar(index, ru_mean, bar_width, alpha=opacity, color='blue', label='Road Utilization')
+	rects2 = plt.bar(index + bar_width, rc_mean, bar_width, alpha=opacity, color='green', label='Road Coverage')
+	print('road utilization ', ru_mean)
+	print('road coverage ', rc_mean)
+
+	plt.xlabel('Algorithm')
+	plt.ylabel('Percentage')
+	plt.xticks(index + bar_width, [file.split('_')[-3] for file in files])
+	plt.legend()
+	plt.tight_layout()
+	plt.show()
 
 if __name__== "__main__":
 	obj = MultiCapture('test').pickle_load(Settings.plot_path, directory=True, json_format=True)
-	#print(obj.average())
+	#print(len(obj.simulation_list[36].get_all_cells_visited(True)), len(obj.simulation_list[36].get_all_cells_visited()))
+	#print(obj.simulation_list[36].player_list[0].reward_hit)
+
+	#print(len(obj.simulation_list[36].reward_list), obj.simulation_list[36].map_junctions)
 
 	#plot_graph_folder(os.path.join(Settings.sim_save_path, 'change capacity 40'), [x for x in range(10, 210, 40)], x_label='Capacity Mean Value', y_label='Coverage (%)')
 	#plot_graph_multiple(os.path.join(Settings.sim_save_path, 'change capacity'), 'capacity','coverage', [x for x in range(10,60,10)])
+
+	#plot_comparision(os.path.join(Settings.sim_save_path, 'comparison'))
+
+
+	#generate box plot to show more details
+	
 

@@ -27,7 +27,7 @@ class Player(object):
 class GridPlayer(object):
 	def __init__(self, start, destination):
 		self.node_hit = [] #for post processing keep track of all the nodes its been through
-		self.collected_sp_list = []
+		self.collected_sp_list = []  #for calculated real coverage and not ru
 		self.reward_hit = [] # for post processing keep track of the capacity at each node
 		self.node_index = 0
 		self.start = start
@@ -35,8 +35,8 @@ class GridPlayer(object):
 		self.path = None
 		self.node_path = None 
 		self.capacity = 100
-		self.expected_reward = 0
 		self.reward=0
+		self.past_recent_nodes = [] #short term memory, in terms of grid junction
 
 	def get_next(self):
 		#print(self.node_path, self.node_index)

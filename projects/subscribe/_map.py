@@ -156,8 +156,10 @@ class Map(object):
 		weight_dict = {} #if weights is required, populate this dic with path weights
 		best_route = None
 		for start_edge in self.junctions[start].adjacent_edges_to:
+
 			for end_edge in self.junctions[end].adjacent_edges_from:
 				current_route = traci.simulation.findRoute(start_edge, end_edge)
+
 				if not best_route:
 					best_route = current_route	
 				else:

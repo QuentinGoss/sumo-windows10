@@ -2,7 +2,7 @@ import tkinter as tk
 import traci
 from _map import Map
 from player import GridPlayer
-from random import randrange
+from random import randrange, choice
 from settings import Settings
 import time
 import numpy as np
@@ -39,9 +39,12 @@ class GridWin(tk.Tk):
 		#self.rowcol_to_junction = self.env_map.row_col(self.row, self.column) #value is the junction id and key is row_col
 
 		self.rowcol_to_junction.update(dict((v, k) for k, v in self.rowcol_to_junction.items()))
-		self.player_list = {} #stores location as key, player object as value
-		self.reward_list = {} #stores location as key, reward value as value
+		self.player_list = {} #stores location as key, player object as value in list
+		self.reward_list = {} #stores location(grid) as key, reward value as value
 		self.random_uniform_reward_list = {} #akbas
+		self.visited_cell_list = {} #location as key, visited amount as value
+
+		self.min_reward = 0 #min reward value
 
 
 		self.gui = gui
@@ -84,10 +87,13 @@ class GridWin(tk.Tk):
 		if (not replay) or self.testing == 'budget':
 			for center in self.reward_distribution_center:
 				self.generate_reward_spread(center[0], center[1], self.setting.reward_value_random[1], self.setting.reward_position_std, self.setting.reward_amount, mean=self.setting.reward_value_random[0])
+				if self.setting.percent_reward_dist:
+					#if we deicided to spread reward based off percentage, only need to do it once over the entire map
+					break
 
 		self.simulation(replay=replay)
 		if self.testing == 'budget':
-			#reset reward list if testing budget
+			#reset reward list if testing budget. testing budget means change budget values thus change the spread of reward every after every simulation
 			self.reward_list = {}
 
 
@@ -177,6 +183,13 @@ class GridWin(tk.Tk):
 		if self.reward_list[string_key] < 0:
 			self.reward_list[string_key]=0
 
+
+		if self.min_reward == 0 or (self.reward_list[string_key] < self.min_reward):
+			self.min_reward = self.reward_list[string_key]
+			print(f'min reward value is {self.min_reward} at location {string_key}')
+		
+
+
 		if self.gui:
 			self.grid_list[row][column].configure(text=str(self.reward_list[string_key]))
 
@@ -229,6 +242,24 @@ class GridWin(tk.Tk):
 		root.destroy()
 
 	def generate_reward_spread(self, x, y, value_std, position_std, amount, mean=None):
+
+		if self.setting.percent_reward_dist:
+			print(f'length is {len(self.reward_list)}')
+			#if defined percentage is true then spread reward based off the percentage value randomly over the map
+			junction_list = np.array(list(self.env_map.junctions.keys()))
+			choice_junctions = [self.rowcol_to_junction[x] for x in np.random.choice(junction_list, int(len(junction_list)*self.setting.percent_reward_dist), replace=False)]
+			for junct_grid in choice_junctions:
+				row, column = int(junct_grid.split('_')[0]), int(junct_grid.split('_')[1])
+				if mean:
+					mean_dist = self.get_truncated_normal(mean, value_std, 0, 10*value_std*mean).rvs(amount+10000).astype(float)
+					self.add_reward(row, column, np.random.choice(mean_dist, 1)[0])
+
+			assert len(self.reward_list) <= len(junction_list), f'Error reward list greater than junction'
+
+			assert len(self.reward_list) == int(len(junction_list)*self.setting.percent_reward_dist), f'Error reward and expcted per not match expected {int(len(junction_list)*self.setting.percent_reward_dist)}, got {len(self.reward_list)} chocie {len(choice_junctions)}'
+			return
+
+
 		#if mean is not none generate distribution based off mean to add to rewards
 		x, y = self.find_closest_road(x, y)
 
@@ -310,7 +341,7 @@ class GridWin(tk.Tk):
 		self.replay_simulation(load=True)
 
 
-	def replay_simulation(self, load=False):
+	def replay_simulation(self, algo, load=False):
 		print('player numbers total(10):',len(self.cap.player_list))
 		for value in self.cap.player_list:
 			new_player = GridPlayer(value.start, value.destination)
@@ -323,7 +354,7 @@ class GridWin(tk.Tk):
 
 		self.cap.player_list=[]
 
-		return self.start_sim(replay=True, load=load)
+		return self.start_sim(algo=algo, replay=True, load=load)
 
 
 	def save_simulation(self):
@@ -401,6 +432,7 @@ class GridWin(tk.Tk):
 			destination = str(randrange(self.row))+'_'+str(randrange(self.column))
 
 		if string_key == destination:
+			print('start is destination')
 			return False
 
 		try:	
@@ -410,12 +442,14 @@ class GridWin(tk.Tk):
 				player_instance = GridPlayer(self.rowcol_to_junction[string_key], self.rowcol_to_junction[destination])
 				player_instance.path = self.env_map.find_best_route(player_instance.start, player_instance.destination)
 				if not (player_instance.path and player_instance.path.edges):
+					print('no path edges')
 					return False
 				player_instance.node_path = [self.env_map.edges[x]._to for x in player_instance.path.edges]
 
 			player_instance.capacity = self.get_truncated_normal(self.setting.player_capacity_random[0], self.setting.player_capacity_random[1], 0, self.setting.player_capacity_random[0]*2).rvs(1)[0]
 			#print('plyer capacity is: ', player_instance.capacity)
 		except KeyError as e:
+			print(f'no key in dict {e}')
 			return False
 
 		print(f'vehicle start at {string_key} end at {destination} capacity value is {player_instance.capacity}, reward list len is {len(self.reward_list)}')
@@ -423,9 +457,9 @@ class GridWin(tk.Tk):
 
 		if string_key in self.player_list:
 			self.player_list[string_key].append(player_instance)
+			self.visited_cell_list[self.rowcol_to_junction[string_key]] += 1
 		else:
 			self.player_list[string_key] = [player_instance]
-
 
 
 		self.env_map.junctions[self.rowcol_to_junction[string_key]].number_players += 1
@@ -451,11 +485,10 @@ class GridWin(tk.Tk):
 
 
 
-	def GTA_next_node(self, location, player_instance, current_node, next_node):
+	def GTA_next_node(self, location, player_instance, current_node):
 		#takes in location, player, and next node return new next node and player instance
-		cells = self.find_adjacent_cells(location)
-		if not cells:
-			print('vehicle reached dead end')
+		cells = self.find_adjacent_cells(location) #return grid junction
+		assert cells, f'Junction has no where else to go {location}'
 
 		new_route = player_instance.path
 
@@ -465,7 +498,9 @@ class GridWin(tk.Tk):
 		max_utility_cell = None
 
 		for cell in cells:
-			adjacent_players = self.find_adjacent_players(cell) #in jake's code this should return N-1
+			#print(f'cells value is {cells}')
+
+			adjacent_players = self.find_adjacent_players(cell)
 			assert adjacent_players > 0, f'player is {adjacent_players} failed, location: {location}, surrounding cells: {cells}, current: {cell}, player: {self.player_list[location]}'
 
 			cell_utility = 0  #total utility at that cell 
@@ -480,7 +515,7 @@ class GridWin(tk.Tk):
 			expected_sensing_plan = 0
 
 
-			if adjacent_players <=1:
+			if adjacent_players == 1: #no one is around me
 				expected_utility = cell_utility
 				expected_sensing_plan = self.env_map.junctions[self.rowcol_to_junction[cell]].cost
 			else:
@@ -493,33 +528,31 @@ class GridWin(tk.Tk):
 					prM = numerator/denom
 					expected_utility += (prM*(cell_utility/pow(current_player, 2)))
 					expected_sensing_plan += (prM*(self.compute_sensing_plan(current_player, self.reward_list[cell], self.env_map.junctions[self.rowcol_to_junction[cell]].cost)))
-			if (expected_utility > max_utility) and (expected_sensing_plan <= player_instance.capacity):
 
+
+
+
+			if (expected_utility > max_utility) and (expected_sensing_plan <= player_instance.capacity) and (not cell in player_instance.past_recent_nodes):
+				#choose highest utility, with capacity taken into consideration, as well as no repeating within last 3 visited
 				max_utility = expected_utility
 				max_utility_cell = cell
-
-		
-
-		
 
 
 		#this part to generate the weighted random path
 
-		if not max_utility_cell: #if ultilit cell is none
-			#cell weight defined by putting more weight on
-			#give higher weights to those cells havent visited
-			#give higher weights to those path with smallest cost
-			#if reward too low use weighted random?
-
-			
+		if not max_utility_cell:
+			#if adj cells no rewards
+			#if adj cells rewards dont fit capacity
+			#weighted random need to priotize coverage good
 			weight_dict, best_route = self.env_map.find_best_route(current_node, player_instance.destination, weights=True)
+			#weight_dict = {key:value.travelTime*self.visited_cell_list[key]*len(value.edges) if key in self.visited_cell_list else value.travelTime for key, value in weight_dict.items()}
+			#travel time multiple by cell visited number , multiple by number of edges before reaching destination
+
+
+
 			try:
 				total_sum = reduce(lambda x,y:x+y,[exp(self.setting.theta_random/x.travelTime) for x in weight_dict.values()])
 				prob_distribute = [exp(self.setting.theta_random/x.travelTime)/total_sum for x in weight_dict.values()]
-
-				#print('prob_distribute ', prob_distribute)
-				#print('max value is {}, index value is {}, the next cell is {}, current cell is {}'.format(max(prob_distribute), prob_distribute.index(max(prob_distribute)), self.rowcol_to_junction[list(weight_dict.keys())[prob_distribute.index(max(prob_distribute))]], self.rowcol_to_junction[current_node]))
-
 
 				selected_index = np.random.choice(len(cells), 1, p=prob_distribute)
 				next_node = list(weight_dict.keys())[selected_index[0]]
@@ -529,84 +562,89 @@ class GridWin(tk.Tk):
 				next_node = self.env_map.edges[best_route.edges[0]]._to
 
 
-			player_instance.expected_reward = 0
 
 		else:
-			player_instance.expected_reward = max_utility
+			#when max utility cells is found its in terms of grid junction need to convert to sumo junction
 			next_node = self.rowcol_to_junction[max_utility_cell]
 
 
 		player_instance = self.redirect_route(player_instance, new_route)
 
+		if len(player_instance.past_recent_nodes) < self.setting.max_memory_size:
+			player_instance.past_recent_nodes.append(self.rowcol_to_junction[next_node]) #sumo junction is added to memory
+		else:
+			player_instance.past_recent_nodes.pop(0)
+			player_instance.past_recent_nodes.append(self.rowcol_to_junction[next_node])
+
 		return next_node, player_instance
 
 
 	def simulation(self, replay=False):
-		multi_data = MultiCapture('Traffic Simulation')
-		i=0
-		while i < self.setting.simulation_steps:
-			print('iteration ', i)
-			if replay:
-				suc = self.replay_simulation()
-			else:
-				suc = self.start_sim() #first time running simulation generate random players save it to self.cap
-				replay=True
+		for algo in self.setting.game_theory_algorithm:
+			multi_data = MultiCapture('Traffic Simulation')
+			i=0
+			while i < self.setting.simulation_steps:
+				print('iteration ', i)
+				if replay:
+					suc = self.replay_simulation(algo=algo)
+				else:
+					suc = self.start_sim(algo=algo) #first time running simulation generate random players save it to self.cap
+					replay=True
 
 
 
-			if suc: #if simulation is success
-				self.cap.setting = self.setting
-				self.cap.reward_list = self.reward_list
-				self.cap.reward_junction_ratio = len(self.reward_list)/len(self.env_map.junctions)
-				cov = self.cap.calculate_coverage()
-				test_cov = self.cap.calculate_test_coverage()
-				print('road utilization is ', cov)
-				print('coverage is ', test_cov)
-				multi_data.simulation_conv_list.append(cov)
-				multi_data.simulation_test_coverage.append(test_cov)
-				multi_data.simulation_list.append(self.cap)
-				
-				#if i%10 ==0:
-				if i == (self.setting.simulation_steps-1):
-					if self.setting.game_theory_algorithm!='gta':
-						multi_data.pickle_save(os.path.join(Settings.sim_save_path, f'reward{self.setting.reward_value_random[0]}_Step{self.setting.simulation_steps}_{self.game_theory_algorithm}.sim'))
-					else:
-						multi_data.pickle_save(os.path.join(Settings.sim_save_path, f'reward{self.setting.reward_value_random[0]}_capacity{self.setting.player_capacity_random[0]}_Step{self.setting.simulation_steps}.sim'))
-				i+=1
-			
-			self.player_list = {}
-
-
-		temp_multi_data = MultiCapture('Traffic Simulation')
-
-		if self.testing =='budget':
-			temp = self.reward_list #save the temp reward list before replacing it with uniform reward.
-
-			j = 0
-			while j < self.setting.simulation_steps:
-				#this is for random uniform reward distribution
-				self.reward_spread_uniform((multi_data.simulation_list[0].reward_junction_ratio)*len(self.env_map.junctions))
-				suc = self.replay_simulation()
-				if suc:
+				if suc: #if simulation is success
+					self.cap.setting = self.setting
+					self.cap.reward_list = self.reward_list
+					self.cap.reward_junction_ratio = len(self.reward_list)/len(self.env_map.junctions)
 					cov = self.cap.calculate_coverage()
 					test_cov = self.cap.calculate_test_coverage()
-					print('RU for random reward ', cov)
-					print('COV for random reward ', test_cov)
-					temp_multi_data.simulation_conv_list.append(cov)
-					temp_multi_data.simulation_test_coverage.append(test_cov)
-					temp_multi_data.simulation_list.append(self.cap)
-				if j == (self.setting.simulation_steps-1):
-					if self.setting.game_theory_algorithm!='gta':
-						temp_multi_data.pickle_save(os.path.join(Settings.sim_save_path, f'reward{self.setting.reward_value_random[0]}_Step{self.setting.simulation_steps}_default_random_reward.sim'))
-					else:
-						temp_multi_data.pickle_save(os.path.join(Settings.sim_save_path, f'reward{self.setting.reward_value_random[0]}_capacity{self.setting.player_capacity_random[0]}_Step{self.setting.simulation_steps}_random_reward.sim'))
-				j+=1
+					print('road utilization is ', cov)
+					print('coverage is ', test_cov)
+					multi_data.simulation_conv_list.append(cov)
+					multi_data.simulation_test_coverage.append(test_cov)
+					multi_data.simulation_list.append(self.cap)
+					
+					#if i%10 ==0:
+					if i == (self.setting.simulation_steps-1):
+						if self.setting.percent_reward_dist:
+							multi_data.pickle_save(os.path.join(Settings.sim_save_path, f'{self.setting.percent_reward_dist}_reward{self.setting.reward_value_random[0]}_capacity{self.setting.player_capacity_random[0]}_Step{self.setting.simulation_steps}_{algo}_cluster_reward.sim'))
+						else:
+							multi_data.pickle_save(os.path.join(Settings.sim_save_path, f'reward{self.setting.reward_value_random[0]}_capacity{self.setting.player_capacity_random[0]}_Step{self.setting.simulation_steps}_{algo}_cluster_reward.sim'))
+					i+=1
+				
+				self.player_list = {}
+			#changing rewards should be before this funtion
+			
 			
 
+			if self.testing =='budget' and not self.setting.percent_reward_dist:  #when running budget distribute based off percentage no need to run it second time
+				temp_multi_data = MultiCapture('Traffic Simulation')
+				temp = self.reward_list #save the temp reward list before replacing it with uniform reward.
 
-			self.reward_list = temp
+				j = 0
+				while j < self.setting.simulation_steps:
+					#this is for random uniform reward distribution
+					self.reward_spread_uniform((multi_data.simulation_list[0].reward_junction_ratio)*len(self.env_map.junctions))
+					suc = self.replay_simulation(algo=algo)
+					if suc:
+						cov = self.cap.calculate_coverage()
+						test_cov = self.cap.calculate_test_coverage()
+						print('RU for random reward ', cov)
+						print('COV for random reward ', test_cov)
+						temp_multi_data.simulation_conv_list.append(cov)
+						temp_multi_data.simulation_test_coverage.append(test_cov)
+						temp_multi_data.simulation_list.append(self.cap)
+						if j == (self.setting.simulation_steps-1):
+							temp_multi_data.pickle_save(os.path.join(Settings.sim_save_path, f'reward{self.setting.reward_value_random[0]}_capacity{self.setting.player_capacity_random[0]}_Step{self.setting.simulation_steps}_{algo}_random_reward.sim'))	
+						j+=1
 
-	
+					self.player_list = {}
+
+
+				self.reward_list = temp
+
+		
 	def reward_spread_uniform(self, amount_rewards):
 		#spread rewards uniformly based of ratio
 		self.reward_list = {}
@@ -626,7 +664,105 @@ class GridWin(tk.Tk):
 
 
 
-	def start_sim(self, replay=False, load=False):
+	def greedy_next_node(self, location, player_instance, current_node):
+		'''
+		location current location in terms of sumo
+		player instance the player we are looking at
+		current node is the location in terms of grid values
+		next_node is predicted next node based on dex
+		'''
+
+		shortest_path = False
+		cells = self.find_adjacent_cells(location)
+
+		#cells return grid location not sumo location
+		#reward list returns grid location as well
+
+
+		max_utility_cell = None
+		max_utility = 0
+		for cell in cells:
+			try:
+				self.reward_list[cell]
+				if not max_utility_cell and (self.reward_list[cell]<=player_instance.capacity):
+					max_utility_cell = cell
+					max_utility = self.reward_list[cell]
+				else:
+					if (self.reward_list[cell] > max_utility) and (self.reward_list[cell]<=player_instance.capacity):
+						max_utility_cell = cell
+						max_utility = self.reward_list[cell]
+			except KeyError as e:
+				pass
+
+		#two cases, when no rewards around, or 
+		#find smallest reward, if capacity falls below smallest reward, uses djk instead
+		if not max_utility_cell:
+
+			#let random jump decide on capacity that way greedy no need to implement
+			next_node, player_instance, shortest_path = self.random_next_node(location, player_instance, current_node) #remove random directly go towards destination shortest path
+			#next node for random returns sumo cells
+		else:
+			next_node = max_utility_cell
+
+			assert max_utility_cell in self.reward_list, f'something is wrong {max_utility_cell} supose in reward list'
+
+			player_instance.collected_sp_list.append(next_node)
+
+			#next node normally return grid cells
+
+			next_node = self.rowcol_to_junction[next_node]
+			player_instance.capacity -= max_utility
+				
+
+
+		return next_node, player_instance, shortest_path
+
+
+
+
+
+
+	def random_next_node(self, location, player_instance, current_node):
+		# capacity for random
+		shortest_path = False
+		cells = self.find_adjacent_cells(location)
+		weight_dict, best_route = self.env_map.find_best_route(current_node, player_instance.destination, weights=True)
+		try:
+			total_sum = reduce(lambda x,y:x+y,[exp(self.setting.theta_random/x.travelTime) for x in weight_dict.values()])
+			prob_distribute = [exp(self.setting.theta_random/x.travelTime)/total_sum for x in weight_dict.values()]
+
+			#print('prob_distribute ', prob_distribute)
+			#print('max value is {}, index value is {}, the next cell is {}, current cell is {}'.format(max(prob_distribute), prob_distribute.index(max(prob_distribute)), self.rowcol_to_junction[list(weight_dict.keys())[prob_distribute.index(max(prob_distribute))]], self.rowcol_to_junction[current_node]))
+			selected_index = np.random.choice(len(cells), 1, p=prob_distribute)
+			next_node = list(weight_dict.keys())[selected_index[0]]
+
+		except OverflowError:
+			#when theta random value is too large just take the best route node
+			next_node = self.env_map.edges[best_route.edges[0]]._to
+
+		if self.rowcol_to_junction[next_node] in self.reward_list: #if next node contains rewards
+			if self.reward_list[self.rowcol_to_junction[next_node]] <= player_instance.capacity: #if reward is less than capacity then collect
+				player_instance.collected_sp_list.append(self.rowcol_to_junction[next_node])
+				player_instance.capacity -= self.reward_list[self.rowcol_to_junction[next_node]]
+			else: #cant collect due to capacity
+				if player_instance.capacity < self.min_reward: #check is player capacity less than min reward on map
+					shortest_path = True
+					player_instance.path = self.env_map.find_best_route(current_node, player_instance.destination)
+					player_instance.node_path = [self.env_map.edges[x]._to for x in player_instance.path.edges]
+					player_instance.node_index = 0 #reset path info
+					#need to reset player path setting index =0
+
+
+
+
+		return next_node, player_instance, shortest_path
+
+
+
+
+	def start_sim(self, algo, replay=False, load=False):
+
+		shortest_path = False
 
 		#print('len reward is ', len(self.reward_list))
 
@@ -640,14 +776,18 @@ class GridWin(tk.Tk):
 		if not self.player_list:
 			i = 0
 			while i < self.setting.car_numbers:
-				row, column = randrange(self.row), randrange(self.column)
+				row_col = choice(list(self.env_map.junctions.keys()))
+				row, column = self.rowcol_to_junction[row_col].split('_')[0], self.rowcol_to_junction[row_col].split('_')[1]
 				suc = self.add_player(row, column)
 				if suc:
 					i +=1
+					print(f'player added to {row}, {column}')
+				else:
+					print(f'failed to add player at {row}, {column}')
 
 
 
-		arrived_locations = []
+		arrived_locations = [] #destinations of all vehicles to reset after
 					
 
 		while self.player_list:
@@ -662,12 +802,42 @@ class GridWin(tk.Tk):
 
 					player_left+=1
 
-					next_node = player.get_next()
+					
 					#junction value in sumo
 
 					#insert logic for game theory, 
-					if (self.game_theory_algorithm !='base') and not load: #if its loading from file then just play players
-						next_node, player = self.GTA_next_node(location, player, self.rowcol_to_junction[location], self.rowcol_to_junction[next_node])
+					if algo=='gta' and not load: #if its loading from file then just play players
+						next_node, player = self.GTA_next_node(location, player, self.rowcol_to_junction[location])
+
+
+
+
+					elif algo=='greedy' and not load:
+						#run greedy algo, only go towards highest rewards. check capacity and reduce capacity based on reward value else result in infinite loop
+						if not shortest_path:
+							next_node, player, shortest_path = self.greedy_next_node(location, player, self.rowcol_to_junction[location])
+
+						if shortest_path:
+							print('player taking shortest path in greedy')
+							next_node = player.get_next()
+
+					elif algo=='random' and not load:
+						if not shortest_path:
+							next_node, player, shortest_path = self.random_next_node(location, player, self.rowcol_to_junction[location])
+						
+						if shortest_path:
+							print('player taking shortest path in random')
+							next_node = player.get_next()
+
+
+					elif algo == 'base' and not load:
+						next_node = player.get_next()
+						if self.rowcol_to_junction[next_node] in self.reward_list:
+							if self.reward_list[self.rowcol_to_junction[next_node]] <= player.capacity:
+								player.collected_sp_list.append(self.rowcol_to_junction[next_node])
+								player.capacity -= self.reward_list[self.rowcol_to_junction[next_node]]
+
+
 
 
 					player.node_hit.append(next_node) # for post processing
@@ -715,42 +885,47 @@ class GridWin(tk.Tk):
 
 			#if capactiy too low make random jumps towards destination
 
-			for location, players in self.player_list.items():
-				for i, player in enumerate(players):
-					try:
-						self.player_list[location][i].reward += (self.reward_list[location]/len(self.player_list[location]))
-						location_cost = self.env_map.junctions[self.rowcol_to_junction[location]].cost
-						player_sensing_plan = self.compute_sensing_plan(len(self.player_list[location]), self.reward_list[location], location_cost)
-						
-						#whats the default expected sensing plan when there is only 1 player?? 
-						if self.reward_list[location] != 0:
-							# if you arrived and your cost is more than your player capacity might as well take what ever your capacity can handle
-							if player_sensing_plan <= player.capacity:
-								if player_sensing_plan == 0 and location_cost > player.capacity:
-									player_sensing_plan = player.capacity
-								elif player_sensing_plan == 0 and location_cost <= player.capacity:
-									player_sensing_plan = location_cost
+			if algo=='gta': #reduce capacity based on sensing plan
 
-								self.player_list[location][i].capacity -= player_sensing_plan
-								self.player_list[location][i].collected_sp_list.append(location)
-							else:
-								if self.player_list[location][i].capacity != 0:
-									self.player_list[location][i].capacity = 0
-									self.player_list[location][i].collected_sp_list.append(location)
+				for location, players in self.player_list.items():
+					print('location is ', location)
+					if self.rowcol_to_junction[location] in self.visited_cell_list:
+						self.visited_cell_list[self.rowcol_to_junction[location]] +=1
+					else:
+						self.visited_cell_list[self.rowcol_to_junction[location]] = 1
 
 
-				
-
-							#print(f'player sensing plan value is {player_sensing_plan}, capacity is {player.capacity}')
+					for i, player in enumerate(players):
+						try:
+							self.player_list[location][i].reward += (self.reward_list[location]/len(self.player_list[location]))
+							location_cost = self.env_map.junctions[self.rowcol_to_junction[location]].cost
+							player_sensing_plan = self.compute_sensing_plan(len(self.player_list[location]), self.reward_list[location], location_cost)
 							
+							#whats the default expected sensing plan when there is only 1 player?? 
+							if self.reward_list[location] != 0:
+								# if you arrived and your cost is more than your player capacity might as well take what ever your capacity can handle
+								if player_sensing_plan <= player.capacity:
+									if player_sensing_plan ==0: #calculated sensing plan equal to 0
+										if location_cost > player.capacity:
+											player_sensing_plan = player.capacity
+										else:
+											player_sensing_plan = location_cost
 
-						
+									if player.capacity > 0:
+										self.player_list[location][i].collected_sp_list.append(location)
+										self.player_list[location][i].capacity -= player_sensing_plan
 
-					except KeyError as e:
-						continue
+									if self.player_list[location][i].capacity < 0: 
+										self.player_list[location][i].capacity = 0
+									
+						except KeyError as e:
+							continue
+
+
 
 	
 		print('simulation completed')
+		self.visited_cell_list = {}
 		self.reset_junction_players(arrived_locations)
 		return True
 
@@ -780,7 +955,7 @@ if __name__ == "__main__":
 	cap_value=None
 	
 
-	root = GridWin(gui=False, testing='budget') #testing budget keep caapcity same
+	root = GridWin(gui=False, testing='capacity') #testing budget keep caapcity same
 
 	for i in range(5):
 		#print('im here ', i)
@@ -793,15 +968,9 @@ if __name__ == "__main__":
 			root.cap = cap_value  #use previous cap value
 			root.run_sim_no_gui(replay=True)
 			#reaply simulation needs to run multiple simulations
-		#root.setting.player_capacity_random = (root.setting.player_capacity_random[0] + 40, 5)
-		root.setting.reward_value_random = (root.setting.reward_value_random[0] + 40, 5) 
-
-	
-
-
-
-	root.setting.game_theory_algorithm = 'base'
-	root.run_sim_no_gui(replay=True)
+		root.setting.player_capacity_random = (root.setting.player_capacity_random[0] + 40, 5)
+		#root.setting.reward_value_random = (root.setting.reward_value_random[0] + 40, 5)
+		#root.setting.percent_reward_dist += 0.2
 
 
 	root.on_closing()
