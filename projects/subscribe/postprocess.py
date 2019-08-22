@@ -185,7 +185,7 @@ def plot_comparision(folder, comp='algo'): #take multiple files and compare thei
 	plt.show()
 
 if __name__== "__main__":
-	obj = MultiCapture('test').pickle_load(Settings.plot_path, directory=True, json_format=True)
+	#obj = MultiCapture('test').pickle_load(Settings.plot_path, directory=True, json_format=True)
 	#print(len(obj.simulation_list[36].get_all_cells_visited(True)), len(obj.simulation_list[36].get_all_cells_visited()))
 	#print(obj.simulation_list[36].player_list[0].reward_hit)
 
@@ -194,7 +194,7 @@ if __name__== "__main__":
 	#plot_graph_folder(os.path.join(Settings.sim_save_path, 'change capacity 40'), [x for x in range(10, 210, 40)], x_label='Capacity Mean Value', y_label='Coverage (%)')
 	#plot_graph_multiple(os.path.join(Settings.sim_save_path, 'change capacity'), 'capacity','coverage', [x for x in range(10,60,10)])
 
-	#plot_comparision(os.path.join(Settings.sim_save_path, 'comparison'))
+	plot_comparision(os.path.join(Settings.sim_save_path, 'comparison'))
 
 
 	#generate box plot to show more details
