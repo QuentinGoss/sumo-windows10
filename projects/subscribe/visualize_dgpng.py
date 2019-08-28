@@ -51,7 +51,7 @@ def main():
         cmd += '--png=%s/%s.png ' % (out,sim)
         cmd += '--background-color=(255,255,255,0) '
         cmd += '--node-color=(255,255,255,255) '
-        cmd += '--edge-color=(0,0,0,100) '
+        cmd += '--edge-color=(0,0,0,50) '
         cmd += '--internal-node-color=(0,0,0,0) '
         cmd += '--edge-thickness=10 '
         cmd += '--padding=10 '
