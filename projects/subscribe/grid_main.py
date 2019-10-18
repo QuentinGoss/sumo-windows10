@@ -42,7 +42,6 @@ class GridWin(tk.Tk):
 		self.player_list = {} #stores location as key, player object as value in list
 		self.reward_list = {} #stores location(grid) as key, reward value as value
 		self.random_uniform_reward_list = {} #akbas
-		self.visited_cell_list = {} #location as key, visited amount as value
 
 		self.min_reward = 0 #min reward value
 
@@ -54,7 +53,7 @@ class GridWin(tk.Tk):
 		self.setting = Settings()
 
 		#settings
-		self.reward_distribution_center = [(0,0),(0,self.column),(self.row, 0),(self.row, self.column)]
+		self.reward_distribution_center = [(0,0),  (0,self.column),(self.row, 0),(self.row, self.column)]
 
 
 
@@ -385,15 +384,21 @@ class GridWin(tk.Tk):
 
 
 
-	def find_adjacent_players(self, x_y):
+	def find_adjacent_players(self, x_y, list_players=False): #check for capacity
+		player_list = []
 		player_num = 0
 		adjacent_list = self.find_adjacent_cells(x_y, param='from')
 		for value in adjacent_list:
 			
 			try:
 				player_num +=len(self.player_list[value])
+				for player in self.player_list[value]:
+					player_list.append(player)
 			except KeyError:
 				continue
+
+		if list_players:
+			return player_num, player_list
 		return player_num
 
 	def remove_player(self, row, column, color):
@@ -457,7 +462,6 @@ class GridWin(tk.Tk):
 
 		if string_key in self.player_list:
 			self.player_list[string_key].append(player_instance)
-			self.visited_cell_list[self.rowcol_to_junction[string_key]] += 1
 		else:
 			self.player_list[string_key] = [player_instance]
 
@@ -480,10 +484,9 @@ class GridWin(tk.Tk):
 
 		return player_instance
 
-	def compute_sensing_plan(self, player_amount, reward, cost):
-		return ((player_amount-1)*reward)/((player_amount**2)*cost)
+	
 
-
+ 
 
 	def GTA_next_node(self, location, player_instance, current_node):
 		#takes in location, player, and next node return new next node and player instance
@@ -500,7 +503,7 @@ class GridWin(tk.Tk):
 		for cell in cells:
 			#print(f'cells value is {cells}')
 
-			adjacent_players = self.find_adjacent_players(cell)
+			adjacent_players, player_list = self.find_adjacent_players(cell, list_players=True)
 			assert adjacent_players > 0, f'player is {adjacent_players} failed, location: {location}, surrounding cells: {cells}, current: {cell}, player: {self.player_list[location]}'
 
 			cell_utility = 0  #total utility at that cell 
@@ -516,23 +519,52 @@ class GridWin(tk.Tk):
 
 
 			if adjacent_players == 1: #no one is around me
+				adjusted = True
 				expected_utility = cell_utility
-				expected_sensing_plan = self.env_map.junctions[self.rowcol_to_junction[cell]].cost
+				#expected_sensing_plan = self.env_map.junctions[self.rowcol_to_junction[cell]].cost
+				expected_sensing_plan = 1
 			else:
 				#sum the denomenator of the combination, store ncr in list to reuse later
 				ncr_list = [self.ncr(adjacent_players-1, player_number) for player_number in range(0, adjacent_players)] #consists of a list from 0
 				denom = reduce(lambda x,y: x+y, ncr_list) #from 0 to second to last in list
 
-				for current_player in range(1, adjacent_players+1):
-					numerator = ncr_list[current_player-1] #retrieve ncr value from list
-					prM = numerator/denom
-					expected_utility += (prM*(cell_utility/pow(current_player, 2)))
-					expected_sensing_plan += (prM*(self.compute_sensing_plan(current_player, self.reward_list[cell], self.env_map.junctions[self.rowcol_to_junction[cell]].cost)))
+				adjusted=False
+
+				for i in range(len(player_list), 0, -1):
+					#print("player value is ", player_value)
+					'''
+					for current_player in range(1, adjacent_players+1):
+						numerator = ncr_list[current_player-1] #retrieve ncr value from list
+						prM = numerator/denom
+						expected_utility += (prM*(cell_utility/pow(current_player, 2)))
+						expected_sensing_plan += (prM*(self.compute_sensing_plan(current_player, self.reward_list[cell], self.env_map.junctions[self.rowcol_to_junction[cell]].cost)))
+					'''
+					for current_player in range(1, i+1):
+						numerator = ncr_list[current_player-1] #retrieve ncr value from list
+						prM = numerator/denom
+						expected_utility += (prM*(cell_utility/pow(current_player, 2)))
+						expected_sensing_plan += (prM*(self.compute_sensing_plan(current_player, self.reward_list[cell], self.env_map.junctions[self.rowcol_to_junction[cell]].cost)))
+
+
+					counter = 0
+
+					for player in player_list:
+						if player.capacity >= expected_sensing_plan:
+							counter+=1
+					if counter == i:
+						adjusted = True
+
+						break
+
+
+					expected_sensing_plan = 0
+					expected_utility = 0
+
+			
 
 
 
-
-			if (expected_utility > max_utility) and (expected_sensing_plan <= player_instance.capacity) and (not cell in player_instance.past_recent_nodes):
+			if (expected_utility > max_utility) and (expected_sensing_plan <= player_instance.capacity) and (not cell in player_instance.past_recent_nodes) and adjusted:
 				#choose highest utility, with capacity taken into consideration, as well as no repeating within last 3 visited
 				max_utility = expected_utility
 				max_utility_cell = cell
@@ -569,14 +601,22 @@ class GridWin(tk.Tk):
 
 
 		player_instance = self.redirect_route(player_instance, new_route)
+		player_instance = self.add_stm(player_instance, next_node)
 
+		
+
+		return next_node, player_instance
+
+
+	def add_stm(self, player_instance, next_node):
 		if len(player_instance.past_recent_nodes) < self.setting.max_memory_size:
 			player_instance.past_recent_nodes.append(self.rowcol_to_junction[next_node]) #sumo junction is added to memory
 		else:
 			player_instance.past_recent_nodes.pop(0)
 			player_instance.past_recent_nodes.append(self.rowcol_to_junction[next_node])
 
-		return next_node, player_instance
+		return player_instance
+
 
 
 	def simulation(self, replay=False):
@@ -644,6 +684,10 @@ class GridWin(tk.Tk):
 
 				self.reward_list = temp
 
+
+	
+
+
 		
 	def reward_spread_uniform(self, amount_rewards):
 		#spread rewards uniformly based of ratio
@@ -681,17 +725,27 @@ class GridWin(tk.Tk):
 
 		max_utility_cell = None
 		max_utility = 0
-		for cell in cells:
+		for i, cell in enumerate(cells):
 			try:
 				self.reward_list[cell]
-				if not max_utility_cell and (self.reward_list[cell]<=player_instance.capacity):
+				#if not max_utility_cell and (self.reward_list[cell]<=player_instance.capacity):
+				#print(f"{self.rowcol_to_junction[cell]} , {player_instance.past_recent_nodes}")
+				if cell in player_instance.past_recent_nodes:
+					#print(f"{self.rowcol_to_junction[cell]}  in recent nodes")
+					#exit()
+					continue
+
+				if not max_utility_cell:
 					max_utility_cell = cell
 					max_utility = self.reward_list[cell]
 				else:
-					if (self.reward_list[cell] > max_utility) and (self.reward_list[cell]<=player_instance.capacity):
+					#if (self.reward_list[cell] > max_utility) and (self.reward_list[cell]<=player_instance.capacity):
+					if (self.reward_list[cell] > max_utility):
 						max_utility_cell = cell
 						max_utility = self.reward_list[cell]
 			except KeyError as e:
+				#print(f'im here {i}/{len(cells)}')
+				assert not cell in self.reward_list, f"failed {cell} is in reward_list"
 				pass
 
 		#two cases, when no rewards around, or 
@@ -702,7 +756,11 @@ class GridWin(tk.Tk):
 			next_node, player_instance, shortest_path = self.random_next_node(location, player_instance, current_node) #remove random directly go towards destination shortest path
 			#next node for random returns sumo cells
 		else:
+		
 			next_node = max_utility_cell
+			next_node = self.rowcol_to_junction[next_node]
+
+			'''
 
 			assert max_utility_cell in self.reward_list, f'something is wrong {max_utility_cell} supose in reward list'
 
@@ -710,9 +768,15 @@ class GridWin(tk.Tk):
 
 			#next node normally return grid cells
 
+			
+
 			next_node = self.rowcol_to_junction[next_node]
 			player_instance.capacity -= max_utility
-				
+			player_instance.reward += max_utility
+
+			#this calculation is done after running 
+			'''
+			player_instance =  self.add_stm(player_instance, next_node)
 
 
 		return next_node, player_instance, shortest_path
@@ -740,10 +804,13 @@ class GridWin(tk.Tk):
 			#when theta random value is too large just take the best route node
 			next_node = self.env_map.edges[best_route.edges[0]]._to
 
+		'''
+
 		if self.rowcol_to_junction[next_node] in self.reward_list: #if next node contains rewards
 			if self.reward_list[self.rowcol_to_junction[next_node]] <= player_instance.capacity: #if reward is less than capacity then collect
 				player_instance.collected_sp_list.append(self.rowcol_to_junction[next_node])
 				player_instance.capacity -= self.reward_list[self.rowcol_to_junction[next_node]]
+				player_instance.reward += self.reward_list[self.rowcol_to_junction[next_node]]
 			else: #cant collect due to capacity
 				if player_instance.capacity < self.min_reward: #check is player capacity less than min reward on map
 					shortest_path = True
@@ -751,13 +818,15 @@ class GridWin(tk.Tk):
 					player_instance.node_path = [self.env_map.edges[x]._to for x in player_instance.path.edges]
 					player_instance.node_index = 0 #reset path info
 					#need to reset player path setting index =0
-
+		'''
+		player_instance = self.add_stm(player_instance, next_node)
 
 
 
 		return next_node, player_instance, shortest_path
 
-
+	
+					
 
 
 	def start_sim(self, algo, replay=False, load=False):
@@ -832,10 +901,13 @@ class GridWin(tk.Tk):
 
 					elif algo == 'base' and not load:
 						next_node = player.get_next()
+						'''
 						if self.rowcol_to_junction[next_node] in self.reward_list:
 							if self.reward_list[self.rowcol_to_junction[next_node]] <= player.capacity:
 								player.collected_sp_list.append(self.rowcol_to_junction[next_node])
 								player.capacity -= self.reward_list[self.rowcol_to_junction[next_node]]
+								player.reward += self.reward_list[self.rowcol_to_junction[next_node]]
+						'''
 
 
 
@@ -883,51 +955,97 @@ class GridWin(tk.Tk):
 
 			print(f'{player_left} remaining')
 
-			#if capactiy too low make random jumps towards destination
+			#if capacity too low make random jumps towards destination
 
-			if algo=='gta': #reduce capacity based on sensing plan
+			if algo=='gta' or True: #reduce capacity based on sensing plan
 
 				for location, players in self.player_list.items():
 					print('location is ', location)
-					if self.rowcol_to_junction[location] in self.visited_cell_list:
-						self.visited_cell_list[self.rowcol_to_junction[location]] +=1
-					else:
-						self.visited_cell_list[self.rowcol_to_junction[location]] = 1
+
+					location_cost = self.env_map.junctions[self.rowcol_to_junction[location]].cost
+					
+
+			
+					number_players = self.adjusting_sensing_plan(players, location, location_cost) #will return key error if there is no reward at location
+					#print(f"{number_players} _ number players_ {}")
+
 
 
 					for i, player in enumerate(players):
 						try:
-							self.player_list[location][i].reward += (self.reward_list[location]/len(self.player_list[location]))
-							location_cost = self.env_map.junctions[self.rowcol_to_junction[location]].cost
-							player_sensing_plan = self.compute_sensing_plan(len(self.player_list[location]), self.reward_list[location], location_cost)
+							self.player_list[location][i].reward += (self.reward_list[location]/len(self.player_list[location])) #question mark.. if location no reward dont calculate sensing plan
 							
+							player_sensing_plan = self.compute_sensing_plan(number_players, self.reward_list[location], location_cost)
 							#whats the default expected sensing plan when there is only 1 player?? 
+
+
 							if self.reward_list[location] != 0:
 								# if you arrived and your cost is more than your player capacity might as well take what ever your capacity can handle
 								if player_sensing_plan <= player.capacity:
-									if player_sensing_plan ==0: #calculated sensing plan equal to 0
-										if location_cost > player.capacity:
-											player_sensing_plan = player.capacity
-										else:
-											player_sensing_plan = location_cost
-
-									if player.capacity > 0:
-										self.player_list[location][i].collected_sp_list.append(location)
-										self.player_list[location][i].capacity -= player_sensing_plan
+									self.player_list[location][i].collected_sp_list.append(location)
+									self.player_list[location][i].capacity -= player_sensing_plan
 
 									if self.player_list[location][i].capacity < 0: 
 										self.player_list[location][i].capacity = 0
-									
+								else:
+									print(f'{player_sensing_plan} and cap is {player.capacity}')
+							
+
+							
+
+							
 						except KeyError as e:
+							#print(f'no rewards at {location}')
 							continue
+						except TypeError as t:
+							#print(f'no player matching adjust at {location}, {number_players}')
+							#type error occurs when ajusting sensing plan returns None
+							continue
+
+
+
+
+
+
+
+					
 
 
 
 	
 		print('simulation completed')
-		self.visited_cell_list = {}
 		self.reset_junction_players(arrived_locations)
 		return True
+
+
+	def compute_sensing_plan(self, player_amount, reward, cost):
+		if player_amount ==1:
+			return 1
+
+		return ((player_amount-1)*reward)/((player_amount**2)*cost)
+
+	
+
+
+	def adjusting_sensing_plan(self, players, location, location_cost):
+		#return key error because the location has no reward?
+		try:
+			for i in range(len(players), 0, -1):
+				esp = self.compute_sensing_plan(i, self.reward_list[location], location_cost)
+				counter = 0 #this to count how many fits the capacity
+				for player in players:
+					if esp<=player.capacity:
+						counter+=1
+					print(f'esp:{esp} cap:{player.capacity} len:{len(players)}')
+				if counter == i:
+					return counter
+
+			print(f'i find no one matching sensing plan')
+			return
+		except KeyError:
+			print('i sense no rewards')
+			return
+
 
 
 	def clear(self):
@@ -955,7 +1073,7 @@ if __name__ == "__main__":
 	cap_value=None
 	
 
-	root = GridWin(gui=False, testing='capacity') #testing budget keep caapcity same
+	root = GridWin(gui=False, testing='capacity') #testing budget keep capacity same
 
 	for i in range(5):
 		#print('im here ', i)

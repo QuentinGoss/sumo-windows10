@@ -37,6 +37,7 @@ class GridPlayer(object):
 		self.capacity = 100
 		self.reward=0
 		self.past_recent_nodes = [] #short term memory, in terms of grid junction
+		self.participation = True
 
 	def get_next(self):
 		#print(self.node_path, self.node_index)

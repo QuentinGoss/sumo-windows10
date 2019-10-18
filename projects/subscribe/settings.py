@@ -42,7 +42,6 @@ class Settings(object):
 
 		self.max_memory_size = 3 #3 conseqtive. how many max nodes store in player memory, these cells are not in the reward consideration list
 		#thus when cells is NONE resort to weighted random which uses the gloabal cov cells to determine which weight to choose
-		#weight of weighted rndom is determined by distance to destination and 
 
 
 
