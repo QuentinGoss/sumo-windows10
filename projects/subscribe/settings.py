@@ -7,9 +7,9 @@ class Settings(object):
 	
 
 	default = os.path.abspath('./../') #default is E:\Python\sumo-windows10\projects
-	#sumo_config = os.path.join(default, "grid4/data/grid4.sumocfg")
+	sumo_config = os.path.join(default, "grid4/data/grid4.sumocfg")
 	#sumo_config = os.path.join(default, "Haines_City/data/100/Haines_City.100.sumocfg")
-	sumo_config = os.path.join(default, "london-seg4/data/100/london-seg4.100.100.sumocfg")
+	#sumo_config = os.path.join(default, "london-seg4/data/100/london-seg4.100.100.sumocfg")
 	#sumo_config = os.path.join(default, "orlando/orlando-seg1.1000/orlando-seg1.1000.sumocfg")
 
 	sim_save_path = os.path.join(default, "subscribe/simulations")

@@ -36,9 +36,9 @@ class GridWin(tk.Tk):
 		self.row = int(self.env_map.rows)
 		self.column = int(self.env_map.columns)
 
-		#self.rowcol_to_junction = self.env_map.row_col(self.row, self.column) #value is the junction id and key is row_col
+		self.rowcol_to_junction = self.env_map.row_col(self.row, self.column) #for grid gui
 
-		self.rowcol_to_junction.update(dict((v, k) for k, v in self.rowcol_to_junction.items()))
+		#self.rowcol_to_junction.update(dict((v, k) for k, v in self.rowcol_to_junction.items()))
 		self.player_list = {} #stores location as key, player object as value in list
 		self.reward_list = {} #stores location(grid) as key, reward value as value
 		self.random_uniform_reward_list = {} #akbas
@@ -424,6 +424,8 @@ class GridWin(tk.Tk):
 
 	def add_player(self, row, column, player=None): # add player to dictionary and return a dict
 		string_key = str(row) + '_' + str(column)
+
+		print("adding to ", self.rowcol_to_junction[string_key])
 
 
 		destination = self.setting.destination
@@ -957,7 +959,7 @@ if __name__ == "__main__":
 	cap_value=None
 	
 
-	root = GridWin(gui=False, testing='capacity') #testing budget keep caapcity same
+	root = GridWin(gui=True, testing='capacity') #testing budget keep caapcity same
 
 	for i in range(5):
 		#print('im here ', i)
