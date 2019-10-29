@@ -8,6 +8,30 @@ import os, glob
 from settings import Settings
 import pandas as pd
 from scipy import stats
+from itertools import combinations
+import numpy as np
+
+
+
+class T_test(object):
+
+	def __init__(self, data1, data2):
+		self.data1 = data1
+		self.data2 = data2
+		self.t_value, self.p_value = stats.ttest_ind(data1, data2, equal_var=False)
+		self.get_cl()
+
+	def __str__(self):
+		return f"T:{self.t_value} P:{self.p_value} mean: {(np.mean(self.data1), np.mean(self.data2))} sd:{(np.std(self.data1), np.std(self.data2))} cl: {self.MoE} dm:{self.diff_mean} interval: {self.interval}"
+
+	def get_cl(self):
+		self.diff_mean = abs(np.mean(self.data1) - np.mean(self.data2))
+		self.df = len(self.data1) + len(self.data2) - 2
+		t_val = stats.t.ppf([0.975], self.df) # this is for 95% cl
+		std_avg = np.sqrt(((len(self.data1) - 1)*(np.std(self.data1))**2 + (len(self.data2) - 1)*(np.std(self.data2))**2) / self.df)
+		last_comp = np.sqrt(1/len(self.data1) + 1/len(self.data2))
+		self.MoE = abs(t_val *std_avg * last_comp) #margin of error this is +- from diff mean to get range of 95% conf interval
+		self.interval = [self.diff_mean - self.MoE, self.diff_mean + self.MoE]
 
 
 
@@ -33,8 +57,8 @@ class DataCapture(object): #object per simulation
 		
 
 	#{node:{hit:#, players:[]}}
-	def calculate_coverage(self): #road utilization amount of cells visited over all cells
-		return (len(self.get_all_cells_visited())/self.map_junctions)*100
+	def calculate_coverage(self, repeat=False): #road utilization amount of cells visited over all cells
+		return (len(self.get_all_cells_visited(repeat))/self.map_junctions)*100
 
 	def calculate_test_coverage(self): #actually coverage amount rewarded cells visited over total reward cells
 		reward_cell_visited = []
@@ -143,11 +167,22 @@ class MultiCapture(object): #object for multiple simulations
 		return max(file_list, key=os.path.getctime)
 
 
-	def find_all_cov_cells(self):
+	def find_all_cov_cells(self,_iter =False):
 		new_cov_test = []
 		for sim in self.simulation_list:
 			new_cov_test.append(sim.calculate_test_coverage_temp())
+
+		if _iter:
+			return new_cov_test
 		return np.mean(new_cov_test)
+
+	def find_all_util_cells(self):
+		new_cov_test = []
+		for sim in self.simulation_list:
+			new_cov_test.append(sim.calculate_coverage(repeat=True))
+
+		return np.mean(new_cov_test)
+
 			
 				
 
@@ -210,14 +245,21 @@ def plot_sub(folder, row_col=(2,2), capacity_change=False, box_plot=False):
 
 
 
+
 	divided_list = [files[i:i+4] for i, value in enumerate(files) if i%4==0]
+	divided_list_four = divided_list
 	divided_list = [divided_list[i:i+2] for i, x in enumerate(divided_list) if i%2==0]
 
-	#print(len(divided_list), len(divided_list[-2]))
 
-	#print(divided_list[len(divided_list)][len(divided_list[0])])
+	t_test_result = t_test_independent(divided_list_four) #dict of test object
 
-	#print(divided_list[1])
+
+	for key, value in t_test_result.items():
+		if "gta" in key:
+			print(key, value)
+
+
+	
 
 	if capacity_change:
 		
@@ -245,9 +287,11 @@ def plot_sub(folder, row_col=(2,2), capacity_change=False, box_plot=False):
 		colors=['red','blue','purple','black']
 	
 
-		base_list = np_rc[0]
-		for i, value in enumerate(np_rc): #change this line to nprc or npru to show road utilization or coverage
-			
+		base_list = np_ru[0]
+		for i, value in enumerate(np_ru): #change this line to nprc or npru to show road utilization or coverage
+			#if i ==0:
+				#continue
+
 			#value = value/base_list
 
 			
@@ -257,7 +301,7 @@ def plot_sub(folder, row_col=(2,2), capacity_change=False, box_plot=False):
 		plt.legend()
 		plt.xticks([x for x in range(10,180,10)])
 		plt.xlabel('Capacity')
-		plt.ylabel('Normalized Crowdsourcer Coverage Percentage %')
+		plt.ylabel('Normalized Road Utilization')
 
 
 	else:
@@ -300,14 +344,14 @@ def plot_comparision(files, axs, capacity_change, box_plot): #innner plot functi
 
 		return
 
-	ru_mean = [MultiCapture('test').pickle_load(file, directory=False).average() for file in files]
+	
 	rw_mean = [MultiCapture('test').pickle_load(file, directory=False).average_reward() for file in files]
 
-
-
+	ru_mean = [MultiCapture('test').pickle_load(file, directory=False).average() for file in files]
+	#ru_mean = [MultiCapture('test').pickle_load(file, directory=False).find_all_util_cells() for file in files]
 	rc_mean = [MultiCapture('test').pickle_load(file, directory=False).average_coverage() for file in files]
-	#rc_mean = [MultiCapture('test').pickle_load(file, directory=False).find_all_cov_cells() for file in files]
-	print(rc_mean)
+	#rc_mean = [MultiCapture('test').pickle_load(file, directory=False).find_all_cov_cells() for file in files]   #repeating nodes
+	#print(rc_mean)
 
 	if capacity_change: #single graph showing change in capcity vs either ru, rc or rw
 		return ru_mean, rc_mean, rw_mean
@@ -335,6 +379,41 @@ def plot_comparision(files, axs, capacity_change, box_plot): #innner plot functi
 		axs.legend()
 		autolabel(rects1, axs)
 		autolabel(rects2, axs)
+
+
+
+def t_test_independent(files):
+	
+
+	t_test_result_dict = {}
+	summary_dict = {}
+	for fourfile in files:
+		combs = list(combinations(fourfile, 2))
+		for comb in combs:
+			#sim_obj1 = MultiCapture('test').pickle_load(comb[0], directory=False).simulation_test_coverage
+			#sim_obj2 = MultiCapture('test').pickle_load(comb[1], directory=False).simulation_test_coverage
+			#sim_obj1 = MultiCapture('test').pickle_load(comb[0], directory=False).find_all_cov_cells(_iter=True)
+			#sim_obj2 = MultiCapture('test').pickle_load(comb[1], directory=False).find_all_cov_cells(_iter=True)
+
+			#sim_obj1 = MultiCapture('test').pickle_load(comb[0], directory=False).simulation_conv_list #road util
+			#sim_obj2 = MultiCapture('test').pickle_load(comb[1], directory=False).simulation_conv_list #road util
+
+
+			sim_obj1 = MultiCapture('test').pickle_load(comb[0], directory=False).average_reward(True) #utility
+			sim_obj2 = MultiCapture('test').pickle_load(comb[1], directory=False).average_reward(True)
+
+			test_obj = T_test(sim_obj1, sim_obj2)
+	
+			assert comb[0].split("_")[-5] == comb[1].split("_")[-5]
+
+			key = f"{comb[0].split('_')[-3]}_{comb[1].split('_')[-3]}_{comb[0].split('_')[-5]}"
+			t_test_result_dict[key] = test_obj
+		
+	return t_test_result_dict
+
+
+	#the t value shows the difference and p value shows the significance of that difference, you want it to be <0.05 to accept the hypothesis
+
 
 if __name__== "__main__":
 	#obj = MultiCapture('test').pickle_load(Settings.plot_path, directory=True, json_format=False)

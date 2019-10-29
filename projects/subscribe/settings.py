@@ -21,7 +21,7 @@ class Settings(object):
 		#test params for getting result from simulation
 
 		self.car_numbers = 10  #set the random amount to spawn when no prev defined cars
-		self.simulation_delay = 0 #delay for visualization, 0 runs fast
+		self.simulation_delay = 1 #delay for visualization, 0 runs fast
 		self.game_theory_algorithm = ['gta', 'greedy','random', 'base'] #gta, greedy, base, random
 		#self.game_theory_algorithm = ['base']
 		self.destination = '0_2' #'random' #set to 0 row and 0 column, can be set to 'random'
